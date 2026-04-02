@@ -162,14 +162,14 @@ export class BoardSelector {
       this.selectedBoard = null;
       this.selectedSprint = null;
       await this.loadBoards(client);
-      this.refresh();
+      this.refresh(client);
     });
 
     boardSelect?.addEventListener('change', async (e) => {
       this.selectedBoard = e.target.value ? parseInt(e.target.value) : null;
       this.selectedSprint = null;
       await this.loadSprints(client);
-      this.refresh();
+      this.refresh(client);
     });
 
     sprintSelect?.addEventListener('change', (e) => {
@@ -180,11 +180,11 @@ export class BoardSelector {
     });
   }
 
-  refresh() {
+  refresh(client) {
     const container = document.querySelector('.board-selector');
     if (container) {
       container.outerHTML = this.render();
-      this.bindEvents(window.jiraClient);
+      this.bindEvents(client);
     }
   }
 }
