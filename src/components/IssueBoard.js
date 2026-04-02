@@ -28,7 +28,7 @@ export class IssueBoard {
         jql += ` AND sprint = ${sprint.id}`;
       }
 
-      const result = await this.client.getBoardIssues(board.id, jql, options);
+      const result = await this.client.getBoardIssues(board.id, jql, 0, 100, options);
       this.groupByStatus(result.issues || []);
 
       return result;
