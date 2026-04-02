@@ -12,7 +12,8 @@ const state = {
   project: null,
   board: null,
   sprint: null,
-  currentIssues: []
+  currentIssues: [],
+  issuesAbortController: null
 }
 
 // DOM Elements
@@ -124,12 +125,23 @@ async function handleSelectionChange(selection) {
 async function loadIssues() {
   if (!state.board) return
 
+  // Cancel any previous in-flight request
+  if (state.issuesAbortController) {
+    state.issuesAbortController.abort()
+  }
+  state.issuesAbortController = new AbortController()
+
   const container = document.getElementById('issue-board-container')
   container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading issues...</p></div>'
 
   try {
     const issueBoard = new IssueBoard(state.client, () => loadIssues())
-    await issueBoard.loadIssues(state.board, state.sprint)
+    await issueBoard.loadIssues(state.board, state.sprint, { signal: state.issuesAbortController.signal })
+
+    // Skip update if request was aborted
+    if (state.issuesAbortController.signal.aborted) {
+      return
+    }
 
     container.innerHTML = issueBoard.render()
     issueBoard.bindEvents()
@@ -138,6 +150,11 @@ async function loadIssues() {
     window.currentIssues = issueBoard.columns.values().flat()
     state.currentIssues = window.currentIssues
   } catch (error) {
+    // Ignore abort errors (expected when canceling requests)
+    if (error.name === 'AbortError') {
+      return
+    }
+
     container.innerHTML = `
       <div class="error-message" style="padding: 20px; text-align: center;">
         <p>Failed to load issues: ${error.message}</p>

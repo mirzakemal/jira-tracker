@@ -44,16 +44,44 @@ class JiraClient {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ errorMessages: [response.statusText] }));
+        
+        // Handle specific status codes
+        if (response.status === 401) {
+          console.error('[Jira API] 401 Authentication failed - check your credentials');
+          throw new JiraError(401, 'Authentication failed - please check your Jira credentials and reconnect');
+        }
+        if (response.status === 403) {
+          console.error('[Jira API] 403 Forbidden - insufficient permissions');
+          throw new JiraError(403, 'Forbidden - your account does not have permission for this action');
+        }
+        if (response.status === 404) {
+          console.error('[Jira API] 404 Not found:', endpoint);
+          throw new JiraError(404, 'Resource not found');
+        }
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || '5';
+          console.error(`[Jira API] 429 Rate limited - retry after ${retryAfter} seconds`);
+          throw new JiraError(429, `Rate limited. Please wait ${retryAfter} seconds before trying again`);
+        }
+        if (response.status >= 500) {
+          console.error(`[Jira API] ${response.status} Server error`);
+          throw new JiraError(response.status, 'Jira server error. Please try again later');
+        }
+        
         throw new JiraError(response.status, error.errorMessages?.[0] || error.message || response.statusText);
       }
 
       return await response.json();
     } catch (error) {
       if (error instanceof JiraError) throw error;
-      if (error.message.includes('fetch')) {
+      if (error.name === 'AbortError') {
+        throw error; // Propagate abort errors for cancellation
+      }
+      console.error('[Jira API] Request failed:', endpoint, error);
+      if (error.message.includes('fetch') || error.name === 'TypeError') {
         throw new JiraError(0, 'Network error - check your connection and Jira domain');
       }
-      throw error;
+      throw new JiraError(0, `Request failed: ${error.message}`);
     }
   }
 
@@ -95,12 +123,12 @@ class JiraClient {
   /**
    * Get issues from a board
    */
-  async getBoardIssues(boardId, jql = null, startAt = 0, maxResults = 100) {
+  async getBoardIssues(boardId, jql = null, startAt = 0, maxResults = 100, options = {}) {
     const params = new URLSearchParams({ startAt, maxResults });
     if (jql) params.append('jql', jql);
 
     const endpoint = `/rest/agile/1.0/board/${boardId}/issue?${params}`;
-    return await this.request(endpoint);
+    return await this.request(endpoint, options);
   }
 
   /**
