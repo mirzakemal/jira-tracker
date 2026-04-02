@@ -4,20 +4,22 @@
  */
 
 class JiraClient {
-  constructor({ domain, email, apiToken }) {
+  constructor({ domain, email, apiToken, useProxy = false }) {
     if (!domain || !email || !apiToken) {
       throw new Error('Domain, email, and API token are required');
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new Error('Invalid email format');
     }
-    if (!domain.startsWith('https://')) {
+    if (!domain.startsWith('https://') && !useProxy) {
       console.warn('⚠️ Warning: Using non-HTTPS connection - credentials may be exposed');
     }
     this.domain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
     this.email = email;
     this.apiToken = apiToken;
-    this.baseUrl = `https://${this.domain}`;
+    // In development with Vite proxy, use relative URLs (empty baseUrl)
+    // In production, use full Jira Cloud URL
+    this.baseUrl = useProxy ? '' : `https://${this.domain}`;
   }
 
   /**

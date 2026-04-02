@@ -122,7 +122,9 @@ export class SettingsPanel {
     this.hideError();
 
     try {
-      this.client = new JiraClient({ domain, email, apiToken: token });
+      // Use proxy in development (localhost) to avoid CORS issues
+      const isDevelopment = window.location.hostname === 'localhost';
+      this.client = new JiraClient({ domain, email, apiToken: token, useProxy: isDevelopment });
       this.user = await this.client.testConnection();
       this.isConnected = true;
 
