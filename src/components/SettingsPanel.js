@@ -15,7 +15,7 @@ export class SettingsPanel {
   }
 
   render() {
-    const saved = loadCredentials();
+    const saved = loadCredentials() || {};
 
     return `
       <div class="settings-panel">
