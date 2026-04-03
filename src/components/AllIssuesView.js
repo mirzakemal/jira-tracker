@@ -166,9 +166,7 @@ export class AllIssuesView {
    * Handle saved view save
    */
   handleViewSave(name) {
-    // This is handled by SavedViewsMenu
     return {
-      name,
       columns: this.viewOptions.columns,
       filters: this.filters
     };

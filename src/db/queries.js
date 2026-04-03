@@ -10,7 +10,8 @@ import {
   getByIndex,
   get,
   put,
-  del
+  del,
+  getDatabase
 } from './indexeddb.js';
 
 const STORES = {
@@ -403,12 +404,40 @@ export async function addTag(issueKey, tagName) {
  */
 export async function removeTag(issueKey, tagName) {
   await initDatabase();
-  const tags = await getAll(STORES.TAGS);
-  const tagToDelete = tags.find(t => t.issue_key === issueKey && t.tag_name === tagName);
-  if (tagToDelete) {
-    await del(STORES.TAGS, tagToDelete.id);
-    invalidateFilterCache(); // Tags changed, invalidate cache
-  }
+  const db = getDatabase();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.TAGS, 'readwrite');
+    const store = tx.objectStore(STORES.TAGS);
+    const index = store.index('issue_key');
+    const request = index.openCursor(IDBKeyRange.only(issueKey));
+
+    let deleted = false;
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.tag_name === tagName) {
+          cursor.delete();
+          deleted = true;
+        }
+        cursor.continue();
+      } else {
+        // Cursor finished iterating, wait for transaction to complete
+        if (deleted) {
+          tx.oncomplete = () => {
+            invalidateFilterCache();
+            resolve();
+          };
+        } else {
+          resolve(); // Tag not found
+        }
+      }
+    };
+
+    request.onerror = () => reject(new Error(request.error?.message));
+    tx.onerror = () => reject(new Error(tx.error?.message));
+  });
 }
 
 /**
@@ -494,8 +523,33 @@ export async function saveView(name, columns, filters) {
  */
 export async function getSavedViews() {
   await initDatabase();
-  const views = await getAll(STORES.VIEWS);
-  return views.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const db = getDatabase();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.VIEWS, 'readonly');
+    const store = tx.objectStore(STORES.VIEWS);
+    const request = store.openCursor();
+
+    const results = [];
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        // Add the key (id) to the view object
+        results.push({
+          id: cursor.key,
+          ...cursor.value
+        });
+        cursor.continue();
+      } else {
+        // Sort by created_at descending
+        results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        resolve(results);
+      }
+    };
+
+    request.onerror = () => reject(new Error(request.error?.message));
+  });
 }
 
 /**
@@ -503,5 +557,7 @@ export async function getSavedViews() {
  */
 export async function deleteView(id) {
   await initDatabase();
-  await del(STORES.VIEWS, id);
+  // Ensure id is a number for IndexedDB autoIncrement key
+  const numericId = typeof id === 'string' ? parseInt(id) : id;
+  await del(STORES.VIEWS, numericId);
 }

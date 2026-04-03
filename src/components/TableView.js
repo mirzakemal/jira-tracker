@@ -417,7 +417,11 @@ export class TableView {
 
     const closeModal = () => {
       const modal = document.getElementById('tags-editor-modal');
-      if (modal) modal.remove();
+      if (modal) {
+        modal.remove();
+        // Refresh table after modal is closed to reflect tag changes
+        this.refresh();
+      }
     };
 
     closeBtn?.addEventListener('click', closeModal);
@@ -427,40 +431,37 @@ export class TableView {
       const tagName = input?.value?.trim();
       if (!tagName) return;
 
-      const { addTag, getTagsForIssues } = await import('../db/queries.js');
-
       try {
-        addTag(issueKey, tagName);
-        // Refresh tags
-        const newTags = getTagsForIssues([issueKey]);
-        this.issueTags = { ...this.issueTags, ...newTags };
-        this.refresh();
+        const { addTag, getTags } = await import('../db/queries.js');
 
-        // Update the modal
-        const tags = this.issueTags[issueKey] || [];
+        await addTag(issueKey, tagName);
+        // Update tags for this specific issue (don't refresh table while modal is open)
+        const newTags = await getTags(issueKey);
+        this.issueTags[issueKey] = newTags;
+
+        // Update the modal UI
         if (existingContainer) {
-          existingContainer.innerHTML = tags.map(tag => `
-            <span class="tag-badge" data-tag="${this.escapeHtml(tag)}">
-              ${this.escapeHtml(tag)}
-              <button class="tag-remove" data-tag="${this.escapeHtml(tag)}">&times;</button>
-            </span>
-          `).join('');
+          existingContainer.innerHTML = newTags.length === 0
+            ? '<p class="no-tags">No tags yet</p>'
+            : newTags.map(tag => `
+                <span class="tag-badge" data-tag="${this.escapeHtml(tag)}">
+                  ${this.escapeHtml(tag)}
+                  <button class="tag-remove" data-tag="${this.escapeHtml(tag)}">&times;</button>
+                </span>
+              `).join('');
 
-          // Bind remove events
+          // Re-bind remove events for newly created buttons
           existingContainer.querySelectorAll('.tag-remove').forEach(btn => {
             btn.addEventListener('click', async (e) => {
               const tag = btn.dataset.tag;
-              const { removeTag } = await import('../db/queries.js');
-              removeTag(issueKey, tag);
+              const { removeTag, getTags } = await import('../db/queries.js');
+              await removeTag(issueKey, tag);
 
-              // Refresh
-              const { getTagsForIssues } = await import('../db/queries.js');
-              const newTags = getTagsForIssues([issueKey]);
-              this.issueTags = { ...this.issueTags, ...newTags };
-              this.refresh();
+              // Refresh tags for this specific issue
+              const updatedTags = await getTags(issueKey);
+              this.issueTags[issueKey] = updatedTags;
 
-              // Update modal
-              const updatedTags = this.issueTags[issueKey] || [];
+              // Update modal UI
               existingContainer.innerHTML = updatedTags.length === 0
                 ? '<p class="no-tags">No tags yet</p>'
                 : updatedTags.map(t => `
@@ -489,17 +490,15 @@ export class TableView {
     existingContainer?.querySelectorAll('.tag-remove').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const tag = btn.dataset.tag;
-        const { removeTag, getTagsForIssues } = await import('../db/queries.js');
+        const { removeTag, getTags } = await import('../db/queries.js');
 
         try {
-          removeTag(issueKey, tag);
-          // Refresh
-          const newTags = getTagsForIssues([issueKey]);
-          this.issueTags = { ...this.issueTags, ...newTags };
-          this.refresh();
+          await removeTag(issueKey, tag);
+          // Refresh tags for this specific issue (don't refresh table while modal is open)
+          const updatedTags = await getTags(issueKey);
+          this.issueTags[issueKey] = updatedTags;
 
-          // Update modal
-          const updatedTags = this.issueTags[issueKey] || [];
+          // Update modal UI
           existingContainer.innerHTML = updatedTags.length === 0
             ? '<p class="no-tags">No tags yet</p>'
             : updatedTags.map(t => `
