@@ -303,6 +303,28 @@ async function upsertIssues(issues, boardId, sprintId) {
   const issuesToUpdate = issues.map(issue => {
     const fields = issue.fields || {};
     const fixVersion = fields.fixVersions?.[0]?.name || null;
+    const parentKey = fields.parent?.key || null;
+
+    // Calculate start date from sprint or use custom field
+    let startDate = null;
+    let sprintEndDate = null;
+
+    // Try to get sprint dates from issue.sprint field (expanded sprint data)
+    if (issue.sprint) {
+      const sprint = Array.isArray(issue.sprint) ? issue.sprint[0] : issue.sprint;
+      startDate = sprint?.startDate || sprint?.start_date || null;
+      sprintEndDate = sprint?.endDate || sprint?.end_date || null;
+
+      // Log if we found sprint dates - useful for debugging
+      if (startDate || sprintEndDate) {
+        console.log(`[Sync] Issue ${issue.key}: Found sprint dates - start: ${startDate}, end: ${sprintEndDate}`);
+      }
+    }
+
+    // Debug logging for parent_key
+    if (parentKey) {
+      console.log(`[Sync] Issue ${issue.key}: Has parent_key = ${parentKey}`);
+    }
 
     let customer = null;
     let product = null;
@@ -359,8 +381,10 @@ async function upsertIssues(issues, boardId, sprintId) {
       created_at: fields.created || null,
       updated_at: fields.updated || null,
       resolved_at: fields.resolutiondate || null,
-      due_date: fields.duedate || null,
+      start_date: startDate,
+      due_date: fields.duedate || fields.dueDate || null, // Handle both camelCase and snake_case
       fix_version: fixVersion,
+      parent_key: parentKey,
       customer,
       product,
       qa_tester_id: qaTesterId,

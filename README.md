@@ -8,6 +8,7 @@ A modern, browser-based Jira planning tool with local IndexedDB storage. View yo
 - **Kanban Board**: View issues organized by status (To Do, In Progress, Done, etc.)
 - **Table View**: Alternative grid view with customizable columns
 - **All Issues View**: See all sprints (past, current & future) in one place
+- **Roadmap Planner**: Timeline/Gantt view with swimlanes, sprint markers, and date range filtering
 - **Advanced Filtering**:
   - Status (multi-select)
   - Fix Version
@@ -69,8 +70,17 @@ The app will open at `http://localhost:5173`
 3. **View Issues**:
    - **Kanban Board**: View issues by status (default)
    - **All Issues**: Click "All Issues" button for table view with filters
+   - **Roadmap**: Click "Roadmap" button for timeline/Gantt view
 
-4. **Filter Issues** (All Issues view):
+4. **Roadmap View**:
+   - **Date Range**: Select start and end dates, or use presets (Today, 3 Months, 6 Months)
+   - **Group By**: Organize swimlanes by Epic/Theme, Status, Assignee, or Fix Version
+   - **Zoom Level**: Adjust timeline granularity (Weeks, Months, Quarters)
+   - **Issue Bars**: Horizontal bars show issue duration based on start/due dates
+   - **Sprint Markers**: Vertical bands indicate sprint boundaries
+   - **Click to Open**: Click any issue bar to open it in Jira
+
+5. **Filter Issues** (All Issues view):
    - Use the filter panel to narrow down issues
    - Multiple filters can be combined
    - Filters are reflected in the URL for sharing
@@ -91,11 +101,17 @@ The app uses hash-based routing for shareable URLs:
 ```
 #/board                              - Kanban board view
 #/all-issues                         - All Issues table view
+#/roadmap                            - Roadmap timeline view
 #/all-issues?customer=Acme           - Filtered by customer
 #/all-issues?status=In%20Progress    - Filtered by status
 #/all-issues?fixVersion=v1.0         - Filtered by fix version
 #/all-issues?tag=urgent              - Filtered by tag
 #/all-issues?assigneeId=xxx          - Filtered by assignee
+```
+
+Roadmap view supports URL parameters for date range and grouping:
+```
+#/roadmap?startDate=2026-04-01&endDate=2026-09-30&groupBy=epic&zoomLevel=month
 ```
 
 Multiple filters can be combined:
@@ -121,7 +137,10 @@ src/
 │   ├── FilterPanel.js    # Filter controls
 │   ├── TagsManager.js    # Tag management modal
 │   ├── SavedViewsMenu.js # Save/load view configurations
-│   └── SyncStatus.js     # Sync status indicator
+│   ├── SyncStatus.js     # Sync status indicator
+│   ├── RoadmapView.js    # Roadmap container component
+│   ├── RoadmapTimeline.js# Timeline/Gantt visualization
+│   └── RoadmapToolbar.js # Roadmap filter toolbar
 ├── db/
 │   ├── indexeddb.js      # IndexedDB wrapper
 │   ├── sync.js           # Data synchronization from Jira

@@ -561,3 +561,379 @@ export async function deleteView(id) {
   const numericId = typeof id === 'string' ? parseInt(id) : id;
   await del(STORES.VIEWS, numericId);
 }
+
+// ==================== Roadmap Queries ====================
+
+/**
+ * Get issues for roadmap view with date range filtering
+ */
+export async function getRoadmapIssues(filters = {}) {
+  await initDatabase();
+
+  // Get all issues and filter by date range
+  const issues = await getAll(STORES.ISSUES);
+
+  // Calculate date range (default: next 3 months)
+  const today = new Date();
+  const startDate = filters.startDate
+    ? new Date(filters.startDate)
+    : today;
+  const endDate = filters.endDate
+    ? new Date(filters.endDate)
+    : new Date(today.setMonth(today.getMonth() + 3));
+
+  // Filter issues that have dates within range
+  const filteredIssues = issues.filter(issue => {
+    // Skip issues without any date fields
+    const issueStart = issue.start_date ? new Date(issue.start_date) : null;
+    const issueDue = issue.due_date ? new Date(issue.due_date) : null;
+    const issueEnd = issue.resolved_at ? new Date(issue.resolved_at) : issueDue;
+
+    // Check if issue falls within date range
+    const hasStartInRange = issueStart && issueStart >= startDate && issueStart <= endDate;
+    const hasDueInRange = issueDue && issueDue >= startDate && issueDue <= endDate;
+    const hasEndInRange = issueEnd && issueEnd >= startDate && issueEnd <= endDate;
+
+    // Include issue if any date field is in range, or if no dates but has sprint
+    if (!hasStartInRange && !hasDueInRange && !hasEndInRange) {
+      return issue.sprint_id && !issue.due_date && !issue.start_date;
+    }
+
+    // Apply other filters
+    if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
+    if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
+    if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
+    if (filters.customer) {
+      const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+      if (!issueCustomers.includes(filters.customer)) return false;
+    }
+    if (filters.product && issue.product !== filters.product) return false;
+    if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
+    if (filters.tag) {
+      const issueTags = filters.issueTags?.[issue.key] || [];
+      if (!issueTags.includes(filters.tag)) return false;
+    }
+
+    return true;
+  });
+
+  // Load users for enrichment
+  const users = await getAll(STORES.USERS);
+  const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
+
+  // Enrich issues with user names and parent info
+  const enrichedIssues = filteredIssues.map(issue => ({
+    ...issue,
+    assignee_name: issue.assignee_id ? (userMap.get(issue.assignee_id) || 'Unassigned') : null,
+    reporter_name: issue.reporter_id ? (userMap.get(issue.reporter_id) || 'Unknown') : null,
+    qa_tester_name: issue.qa_tester_id ? (userMap.get(issue.qa_tester_id) || null) : null
+  }));
+
+  // Load tags
+  const allTags = await getAll(STORES.TAGS);
+  const tagsByIssue = new Map();
+  for (const tag of allTags) {
+    if (!tagsByIssue.has(tag.issue_key)) {
+      tagsByIssue.set(tag.issue_key, []);
+    }
+    tagsByIssue.get(tag.issue_key).push(tag.tag_name);
+  }
+
+  // Attach tags
+  const issuesWithTags = enrichedIssues.map(issue => ({
+    ...issue,
+    tags: tagsByIssue.get(issue.key) || []
+  }));
+
+  return issuesWithTags;
+}
+
+/**
+ * Get parent issues (epics/themes) for swimlane grouping
+ */
+export async function getEpicsOrThemes(projectKey = null) {
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+
+  // Get all unique parent keys from issues
+  const parentKeys = [...new Set(
+    issues
+      .filter(i => i.parent_key)
+      .map(i => i.parent_key)
+  )];
+
+  // If no parent keys, return empty array
+  if (parentKeys.length === 0) {
+    // Fallback: group by issue type (for teams that don't use epics)
+    const issueTypes = [...new Set(
+      issues
+        .filter(i => (!projectKey || i.project_key === projectKey) && i.issue_type)
+        .map(i => i.issue_type)
+    )].sort();
+    return issueTypes.map(type => ({
+      key: `type-${type}`,
+      name: type,
+      is_type: true
+    }));
+  }
+
+  // Fetch parent issues from IndexedDB
+  const parentIssues = [];
+  for (const key of parentKeys) {
+    const parent = await get(STORES.ISSUES, key);
+    if (parent && (!projectKey || parent.project_key === projectKey)) {
+      parentIssues.push({
+        key: parent.key,
+        name: parent.summary || parent.key,
+        is_epic: true
+      });
+    }
+  }
+
+  // Sort by key
+  return parentIssues.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/**
+ * Get sprints within a date range for sprint markers
+ */
+export async function getSprintsInDateRange(startDate, endDate) {
+  await initDatabase();
+  const sprints = await getAll(STORES.SPRINTS);
+
+  const start = startDate ? new Date(startDate) : new Date();
+  const end = endDate ? new Date(endDate) : new Date(start.setMonth(start.getMonth() + 3));
+
+  return sprints.filter(sprint => {
+    const sprintStart = sprint.start_date ? new Date(sprint.start_date) : null;
+    const sprintEnd = sprint.end_date ? new Date(sprint.end_date) : null;
+
+    // Include sprint if it overlaps with the date range
+    if (!sprintStart && !sprintEnd) return false;
+    if (sprintStart && sprintStart > end) return false;
+    if (sprintEnd && sprintEnd < start) return false;
+    return true;
+  }).sort((a, b) => {
+    const aStart = a.start_date ? new Date(a.start_date).getTime() : 0;
+    const bStart = b.start_date ? new Date(b.start_date).getTime() : 0;
+    return aStart - bStart;
+  });
+}
+
+/**
+ * Get issues grouped by parent/epic for roadmap swimlanes
+ */
+export async function getRoadmapData(filters = {}) {
+  const issues = await getRoadmapIssues(filters);
+  const sprints = await getSprintsInDateRange(filters.startDate, filters.endDate);
+
+  // DEBUG: Log issue data structure and field availability
+  console.log('[RoadmapData] Total issues loaded:', issues.length);
+
+  // Count issues with various fields
+  const withParentKey = issues.filter(i => i.parent_key).length;
+  const withStartDate = issues.filter(i => i.start_date).length;
+  const withDueDate = issues.filter(i => i.due_date).length;
+  const withResolvedAt = issues.filter(i => i.resolved_at).length;
+  const withCreatedAt = issues.filter(i => i.created_at).length;
+  const withSprintId = issues.filter(i => i.sprint_id).length;
+
+  // Count by issue type
+  const issueTypes = {};
+  issues.forEach(issue => {
+    const type = issue.issue_type || 'Unknown';
+    issueTypes[type] = (issueTypes[type] || 0) + 1;
+  });
+
+  // Count by fix_version
+  const fixVersions = {};
+  issues.forEach(issue => {
+    const version = issue.fix_version || 'No Version';
+    fixVersions[version] = (fixVersions[version] || 0) + 1;
+  });
+
+  // Sample issue data (first 3 issues)
+  const sampleIssues = issues.slice(0, 3).map(i => ({
+    key: i.key,
+    issue_type: i.issue_type,
+    parent_key: i.parent_key,
+    start_date: i.start_date,
+    due_date: i.due_date,
+    resolved_at: i.resolved_at,
+    created_at: i.created_at,
+    updated_at: i.updated_at,
+    sprint_id: i.sprint_id,
+    fix_version: i.fix_version,
+    status: i.status,
+    assignee_id: i.assignee_id
+  }));
+
+  console.log('[RoadmapData] Field availability:', {
+    withParentKey,
+    withStartDate,
+    withDueDate,
+    withResolvedAt,
+    withCreatedAt,
+    withSprintId
+  });
+  console.log('[RoadmapData] Issue types:', issueTypes);
+  console.log('[RoadmapData] Fix versions:', fixVersions);
+  console.log('[RoadmapData] Sample issues:', sampleIssues);
+
+  // Determine grouping strategy based on filters and data availability
+  const groupBy = filters.groupBy || 'epic';
+  let groups = [];
+  let issuesByGroup = {};
+
+  // Get epics/parents if needed
+  const epics = await getEpicsOrThemes(filters.projectKey);
+
+  switch (groupBy) {
+    case 'epic':
+      // Group by parent_key (Epic/Theme)
+      groups = [...epics];
+      issuesByGroup['no-epic'] = {
+        epic: { key: 'no-epic', name: 'Unsorted Issues' },
+        issues: []
+      };
+
+      // Initialize epic groups
+      epics.forEach(epic => {
+        issuesByGroup[epic.key] = { epic, issues: [] };
+      });
+
+      // Group issues
+      issues.forEach(issue => {
+        const groupKey = issue.parent_key || 'no-epic';
+        if (!issuesByGroup[groupKey]) {
+          issuesByGroup[groupKey] = {
+            epic: { key: groupKey, name: groupKey },
+            issues: []
+          };
+        }
+        issuesByGroup[groupKey].issues.push(issue);
+      });
+      break;
+
+    case 'issue_type':
+      // Group by issue type (Epic, Story, Task, Bug, etc.)
+      const types = [...new Set(issues.map(i => i.issue_type || 'Unknown'))].sort();
+      groups = types.map(type => ({ key: `type-${type}`, name: type, is_type: true }));
+
+      types.forEach(type => {
+        issuesByGroup[`type-${type}`] = {
+          epic: { key: `type-${type}`, name: type, is_type: true },
+          issues: []
+        };
+      });
+
+      issues.forEach(issue => {
+        const groupKey = `type-${issue.issue_type || 'Unknown'}`;
+        issuesByGroup[groupKey].issues.push(issue);
+      });
+      break;
+
+    case 'fix_version':
+      // Group by fix version
+      const versions = [...new Set(issues.map(i => i.fix_version || 'No Version'))].sort();
+      groups = versions.map(v => ({ key: `version-${v}`, name: v, is_version: true }));
+
+      versions.forEach(version => {
+        issuesByGroup[`version-${version}`] = {
+          epic: { key: `version-${version}`, name: version, is_version: true },
+          issues: []
+        };
+      });
+
+      issues.forEach(issue => {
+        const groupKey = `version-${issue.fix_version || 'No Version'}`;
+        issuesByGroup[groupKey].issues.push(issue);
+      });
+      break;
+
+    case 'status':
+      // Group by status
+      const statuses = [...new Set(issues.map(i => i.status || 'Unknown'))].sort();
+      groups = statuses.map(s => ({ key: `status-${s}`, name: s, is_status: true }));
+
+      statuses.forEach(status => {
+        issuesByGroup[`status-${status}`] = {
+          epic: { key: `status-${status}`, name: status, is_status: true },
+          issues: []
+        };
+      });
+
+      issues.forEach(issue => {
+        const groupKey = `status-${issue.status || 'Unknown'}`;
+        issuesByGroup[groupKey].issues.push(issue);
+      });
+      break;
+
+    case 'assignee':
+      // Group by assignee
+      const users = await getAll(STORES.USERS);
+      const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
+      const assignees = [...new Set(issues.map(i => i.assignee_id || 'unassigned'))];
+      groups = assignees.map(id => ({
+        key: `assignee-${id || 'unassigned'}`,
+        name: id ? (userMap.get(id) || 'Unassigned') : 'Unassigned',
+        is_assignee: true
+      }));
+
+      assignees.forEach(assigneeId => {
+        const key = `assignee-${assigneeId || 'unassigned'}`;
+        issuesByGroup[key] = {
+          epic: {
+            key,
+            name: assigneeId ? (userMap.get(assigneeId) || 'Unassigned') : 'Unassigned',
+            is_assignee: true
+          },
+          issues: []
+        };
+      });
+
+      issues.forEach(issue => {
+        const groupKey = `assignee-${issue.assignee_id || 'unassigned'}`;
+        issuesByGroup[groupKey].issues.push(issue);
+      });
+      break;
+
+    default:
+      // Default to epic grouping
+      groups = [...epics];
+      issuesByGroup['no-epic'] = {
+        epic: { key: 'no-epic', name: 'Unsorted Issues' },
+        issues: []
+      };
+      epics.forEach(epic => {
+        issuesByGroup[epic.key] = { epic, issues: [] };
+      });
+      issues.forEach(issue => {
+        const groupKey = issue.parent_key || 'no-epic';
+        if (!issuesByGroup[groupKey]) {
+          issuesByGroup[groupKey] = {
+            epic: { key: groupKey, name: groupKey },
+            issues: []
+          };
+        }
+        issuesByGroup[groupKey].issues.push(issue);
+      });
+  }
+
+  // Filter out empty groups
+  const groupedData = Object.values(issuesByGroup).filter(group => group.issues.length > 0);
+
+  console.log('[RoadmapData] Grouping by:', groupBy);
+  console.log('[RoadmapData] Number of groups:', groupedData.length);
+  groupedData.forEach(g => {
+    console.log(`[RoadmapData] Group "${g.epic.name}": ${g.issues.length} issues`);
+  });
+
+  return {
+    epics: groups,
+    sprints,
+    issues,
+    groupedData,
+    groupBy
+  };
+}

@@ -3,6 +3,7 @@ import { SettingsPanel } from './components/SettingsPanel.js'
 import { BoardSelector } from './components/BoardSelector.js'
 import { IssueBoard } from './components/IssueBoard.js'
 import { AllIssuesView, AllIssuesViewStyles } from './components/AllIssuesView.js'
+import { RoadmapView, RoadmapViewStyles } from './components/RoadmapView.js'
 import { SyncStatus, SyncStatusStyles } from './components/SyncStatus.js'
 import { FilterPanelStyles } from './components/FilterPanel.js'
 import { TableViewStyles } from './components/TableView.js'
@@ -75,8 +76,36 @@ function handleRouteChange({ route, params }) {
 
   console.log('[Route] Handling route:', route, 'params:', params, 'currentView:', state.currentView)
 
-  // Handle route - check for any filter params or all-issues route
-  if (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey) {
+  // Handle route - check for roadmap first, then all-issues, then board
+  if (route === ROUTES.ROADMAP || params.roadmap === 'true') {
+    console.log('[Route] Switching to Roadmap view')
+    if (state.currentView !== 'roadmap') {
+      state.currentView = 'roadmap'
+      updateViewToggle()
+
+      // Hide board selector
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) {
+        boardSelectorContainer.style.display = 'none'
+      }
+
+      const roadmapView = new RoadmapView(state.client, state.jiraDomain, switchToBoardView)
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = roadmapView.render()
+        roadmapView.loadRoadmap(filters)
+      }
+    } else {
+      // Already in roadmap view, apply filters if they changed
+      if (window.currentRoadmapView && filters) {
+        const filtersChanged = JSON.stringify(window.currentRoadmapView.filters) !== JSON.stringify(filters)
+        if (filtersChanged) {
+          window.currentRoadmapView.filters = filters
+          window.currentRoadmapView.loadRoadmap()
+        }
+      }
+    }
+  } else if (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey) {
     console.log('[Route] Switching to All Issues view')
     if (state.currentView !== 'all-issues') {
       state.currentView = 'all-issues'
@@ -145,7 +174,9 @@ async function autoConnect(saved) {
     // Check current route BEFORE rendering to determine initial view
     const { route, params } = parseRoute()
     const hasFilterParams = params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey
-    const initialView = (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || hasFilterParams) ? 'all-issues' : 'board'
+    const initialView = (route === ROUTES.ROADMAP || params.roadmap === 'true') ? 'roadmap'
+      : (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || hasFilterParams) ? 'all-issues'
+      : 'board'
     const filters = paramsToFilters(params)
 
     console.log('[AutoConnect] Initial view will be:', initialView, 'route:', route, 'params:', params)
@@ -207,8 +238,11 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <button class="toggle-btn" id="board-view-btn">
                 Kanban Board
               </button>
-              <button class="toggle-btn active" id="all-issues-view-btn">
+              <button class="toggle-btn" id="all-issues-view-btn">
                 All Issues
+              </button>
+              <button class="toggle-btn ${initialView === 'roadmap' ? 'active' : ''}" id="roadmap-view-btn">
+                Roadmap
               </button>
             </div>
             <div id="sync-status-container"></div>
@@ -228,6 +262,7 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     document.getElementById('refresh-btn')?.addEventListener('click', loadIssues)
     document.getElementById('board-view-btn')?.addEventListener('click', switchToBoardView)
     document.getElementById('all-issues-view-btn')?.addEventListener('click', switchToAllIssuesView)
+    document.getElementById('roadmap-view-btn')?.addEventListener('click', () => switchToRoadmapView())
 
     // Render All Issues view BEFORE awaiting anything
     const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
@@ -262,6 +297,9 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <button class="toggle-btn" id="all-issues-view-btn">
                 All Issues
               </button>
+              <button class="toggle-btn" id="roadmap-view-btn">
+                Roadmap
+              </button>
             </div>
             <div id="sync-status-container"></div>
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
@@ -282,6 +320,7 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     document.getElementById('refresh-btn')?.addEventListener('click', loadIssues)
     document.getElementById('board-view-btn')?.addEventListener('click', switchToBoardView)
     document.getElementById('all-issues-view-btn')?.addEventListener('click', switchToAllIssuesView)
+    document.getElementById('roadmap-view-btn')?.addEventListener('click', () => switchToRoadmapView())
 
     // Initialize sync status in background
     renderSyncStatus().catch(() => {})
@@ -477,6 +516,7 @@ function addGlobalStyles() {
     ${TableViewStyles}
     ${SavedViewsMenuStyles}
     ${TagsManagerStyles}
+    ${RoadmapViewStyles || ''}
     ${AllIssuesViewStyles || ''}
 
     .header-actions {
@@ -742,12 +782,56 @@ async function switchToAllIssuesView(filters = {}) {
 }
 
 /**
+ * Switch to roadmap view
+ */
+async function switchToRoadmapView(filters = {}) {
+  state.currentView = 'roadmap'
+  updateViewToggle()
+
+  // Navigate to roadmap route with filters
+  const params = filtersToParams(filters)
+  params.roadmap = 'true'
+  navigate(ROUTES.ROADMAP, params)
+
+  // Hide board selector
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  // Initialize database if needed
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      console.error('[DB] Failed to initialize:', error)
+      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  // Clear and render roadmap view
+  const container = document.getElementById('issue-board-container')
+  if (container) {
+    container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading roadmap...</p></div>'
+  }
+
+  const roadmapView = new RoadmapView(state.client, state.jiraDomain, switchToBoardView)
+  container.innerHTML = roadmapView.render()
+  roadmapView.loadRoadmap(filters)
+}
+
+/**
  * Update view toggle buttons
  */
 function updateViewToggle() {
   const boardBtn = document.getElementById('board-view-btn')
   const allIssuesBtn = document.getElementById('all-issues-view-btn')
+  const roadmapBtn = document.getElementById('roadmap-view-btn')
 
   if (boardBtn) boardBtn.classList.toggle('active', state.currentView === 'board')
   if (allIssuesBtn) allIssuesBtn.classList.toggle('active', state.currentView === 'all-issues')
+  if (roadmapBtn) roadmapBtn.classList.toggle('active', state.currentView === 'roadmap')
 }

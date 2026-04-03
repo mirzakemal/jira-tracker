@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'jira-planner-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAMES = {
   PROJECTS: 'projects',
   BOARDS: 'boards',
@@ -58,7 +58,7 @@ export async function initDatabase() {
         db.createObjectStore(STORE_NAMES.SPRINTS, { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.ISSUES)) {
-        const issueStore = db.createObjectStore(STORES.ISSUES, { keyPath: 'key' });
+        const issueStore = db.createObjectStore(STORE_NAMES.ISSUES, { keyPath: 'key' });
         issueStore.createIndex('status', 'status', { unique: false });
         issueStore.createIndex('board_id', 'board_id', { unique: false });
         issueStore.createIndex('sprint_id', 'sprint_id', { unique: false });
@@ -77,19 +77,6 @@ export async function initDatabase() {
         const tagStore = db.createObjectStore(STORE_NAMES.TAGS, { autoIncrement: true });
         tagStore.createIndex('issue_key', 'issue_key', { unique: false });
         tagStore.createIndex('tag_name', 'tag_name', { unique: false });
-      }
-      // Upgrade from version 2: add missing indexes
-      if (event.oldVersion < 3 && db.objectStoreNames.contains(STORE_NAMES.ISSUES)) {
-        const issueStore = db.transaction(STORE_NAMES.ISSUES, 'readwrite').objectStore(STORE_NAMES.ISSUES);
-        if (!issueStore.indexNames.contains('qa_tester_id')) {
-          issueStore.createIndex('qa_tester_id', 'qa_tester_id', { unique: false });
-        }
-      }
-      if (event.oldVersion < 3 && db.objectStoreNames.contains(STORE_NAMES.TAGS)) {
-        const tagStore = db.transaction(STORE_NAMES.TAGS, 'readwrite').objectStore(STORE_NAMES.TAGS);
-        if (!tagStore.indexNames.contains('tag_name')) {
-          tagStore.createIndex('tag_name', 'tag_name', { unique: false });
-        }
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.VIEWS)) {
         db.createObjectStore(STORE_NAMES.VIEWS, { autoIncrement: true });

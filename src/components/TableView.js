@@ -62,6 +62,101 @@ export class TableView {
   setSort(field, direction) {
     this.sortField = field;
     this.sortDirection = direction;
+    this.refresh();
+  }
+
+  /**
+   * Get sorted issues
+   */
+  getSortedIssues() {
+    if (!this.sortField) return this.issues;
+
+    return [...this.issues].sort((a, b) => {
+      let aVal = a[this.sortField];
+      let bVal = b[this.sortField];
+
+      // Handle null/undefined values
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+
+      // Handle date fields
+      if (['created_at', 'updated_at', 'resolved_at'].includes(this.sortField)) {
+        aVal = new Date(aVal || 0);
+        bVal = new Date(bVal || 0);
+      }
+
+      // Handle numeric comparison for priority (order: Highest > High > Medium > Low)
+      if (this.sortField === 'priority') {
+        const priorityOrder = { 'Highest': 4, 'High': 3, 'Medium': 2, 'Low': 1 };
+        aVal = priorityOrder[aVal] || 0;
+        bVal = priorityOrder[bVal] || 0;
+      }
+
+      // Handle issue key sorting (e.g., "PROJ-123" vs "PROJ-89" or "TSM2-6964" vs "TSM2-81")
+      if (this.sortField === 'key') {
+        const parseKey = (key) => {
+          // Match alphanumeric prefix (e.g., PROJ, TSM2) followed by hyphen and number
+          const match = key?.match(/([A-Z0-9]+)-(\d+)/i);
+          if (match) {
+            return { prefix: match[1].toUpperCase(), num: parseInt(match[2], 10) };
+          }
+          return { prefix: key?.toUpperCase() || '', num: 0 };
+        };
+        const aKey = parseKey(aVal);
+        const bKey = parseKey(bVal);
+
+        // Compare prefix first, then numeric part
+        let comparison = aKey.prefix.localeCompare(bKey.prefix);
+        if (comparison === 0) {
+          comparison = aKey.num - bKey.num;
+        }
+        const result = this.sortDirection === 'asc' ? comparison : -comparison;
+        return result;
+      }
+
+      // Handle fix_version field (extract numeric part for sorting, e.g., "v1.2" or "1.0.0")
+      if (this.sortField === 'fix_version') {
+        const parseVersion = (ver) => {
+          const nums = String(ver).match(/\d+/g);
+          if (nums) {
+            return nums.map(n => parseInt(n, 10));
+          }
+          return [0];
+        };
+        const aVer = parseVersion(aVal);
+        const bVer = parseVersion(bVal);
+
+        // Compare version parts
+        const maxLen = Math.max(aVer.length, bVer.length);
+        for (let i = 0; i < maxLen; i++) {
+          const aPart = aVer[i] || 0;
+          const bPart = bVer[i] || 0;
+          if (aPart !== bPart) {
+            const comparison = aPart - bPart;
+            return this.sortDirection === 'asc' ? comparison : -comparison;
+          }
+        }
+        return 0;
+      }
+
+      // Handle customer field (comma-separated values) - use first customer for sorting
+      if (this.sortField === 'customer' && typeof aVal === 'string') {
+        aVal = aVal.split(',')[0]?.trim() || '';
+        bVal = bVal.split(',')[0]?.trim() || '';
+      }
+
+      // Compare values
+      let comparison = 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        comparison = aVal.localeCompare(bVal, undefined, { sensitivity: 'base' });
+      } else if (aVal < bVal) {
+        comparison = -1;
+      } else if (aVal > bVal) {
+        comparison = 1;
+      }
+
+      return this.sortDirection === 'asc' ? comparison : -comparison;
+    });
   }
 
   /**
@@ -72,6 +167,7 @@ export class TableView {
       return this.renderEmpty();
     }
 
+    const sortedIssues = this.getSortedIssues();
     const availableColumns = this.getAvailableColumns();
 
     return `
@@ -91,7 +187,7 @@ export class TableView {
               <tr>
                 ${this.columns.map(col => {
                   const colDef = availableColumns.find(c => c.id === col);
-                  const isSortable = ['key', 'summary', 'status', 'priority', 'created_at', 'updated_at', 'resolved_at'].includes(col);
+                  const isSortable = ['key', 'summary', 'status', 'priority', 'issue_type', 'assignee_name', 'reporter_name', 'qa_tester_name', 'fix_version', 'customer', 'product', 'created_at', 'updated_at', 'resolved_at'].includes(col);
                   const sortIcon = this.sortField === col
                     ? (this.sortDirection === 'asc' ? '↑' : '↓')
                     : '';
@@ -111,7 +207,7 @@ export class TableView {
               </tr>
             </thead>
             <tbody>
-              ${this.issues.map(issue => this.renderRow(issue)).join('')}
+              ${sortedIssues.map(issue => this.renderRow(issue)).join('')}
             </tbody>
           </table>
         </div>
@@ -300,14 +396,16 @@ export class TableView {
         const column = header.dataset.column;
         const currentDirection = header.dataset.sort;
 
+        // Toggle: none -> asc -> desc -> asc (cycle)
         let newDirection = 'asc';
         if (currentDirection === 'asc') {
           newDirection = 'desc';
+        } else if (currentDirection === 'desc') {
+          newDirection = 'asc';
         }
 
-        if (this.onSort) {
-          this.onSort(column, newDirection);
-        }
+        console.log('[TableView] Sorting by', column, newDirection);
+        this.setSort(column, newDirection);
       });
     });
 

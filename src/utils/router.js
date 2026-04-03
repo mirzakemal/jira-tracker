@@ -6,6 +6,7 @@
 export const ROUTES = {
   BOARD: 'board',
   ALL_ISSUES: 'all-issues',
+  ROADMAP: 'roadmap',
   SETTINGS: 'settings'
 };
 
@@ -112,7 +113,7 @@ export function filtersToParams(filters) {
   const params = {};
 
   // Simple value filters
-  const simpleFilters = ['projectKey', 'fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate'];
+  const simpleFilters = ['projectKey', 'fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
   simpleFilters.forEach(key => {
     if (filters[key]) {
       params[key] = filters[key];
@@ -134,7 +135,7 @@ export function paramsToFilters(params) {
   const filters = {};
 
   // Simple value filters
-  const simpleFilters = ['projectKey', 'fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate'];
+  const simpleFilters = ['projectKey', 'fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
   simpleFilters.forEach(key => {
     if (params[key]) {
       filters[key] = params[key];
