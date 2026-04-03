@@ -17,7 +17,8 @@ import {
   getStatuses,
   getAllTags,
   getTagsForIssues,
-  invalidateFilterCache
+  invalidateFilterCache,
+  getAllProjects
 } from '../db/queries.js';
 
 export class AllIssuesView {
@@ -133,6 +134,7 @@ export class AllIssuesView {
    */
   async loadFilterOptions() {
     this.availableFilterOptions = {
+      projects: await getAllProjects(),
       status: await getStatuses(),
       fixVersion: await getFixVersions(),
       customer: await getCustomers(),

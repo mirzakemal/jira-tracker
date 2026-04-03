@@ -112,7 +112,7 @@ export function filtersToParams(filters) {
   const params = {};
 
   // Simple value filters
-  const simpleFilters = ['fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate'];
+  const simpleFilters = ['projectKey', 'fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate'];
   simpleFilters.forEach(key => {
     if (filters[key]) {
       params[key] = filters[key];
@@ -134,7 +134,7 @@ export function paramsToFilters(params) {
   const filters = {};
 
   // Simple value filters
-  const simpleFilters = ['fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate'];
+  const simpleFilters = ['projectKey', 'fixVersion', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate'];
   simpleFilters.forEach(key => {
     if (params[key]) {
       filters[key] = params[key];

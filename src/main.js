@@ -76,7 +76,7 @@ function handleRouteChange({ route, params }) {
   console.log('[Route] Handling route:', route, 'params:', params, 'currentView:', state.currentView)
 
   // Handle route - check for any filter params or all-issues route
-  if (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || params.customer || params.fixVersion || params.status || params.product || params.tag) {
+  if (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey) {
     console.log('[Route] Switching to All Issues view')
     if (state.currentView !== 'all-issues') {
       state.currentView = 'all-issues'
@@ -144,7 +144,7 @@ async function autoConnect(saved) {
 
     // Check current route BEFORE rendering to determine initial view
     const { route, params } = parseRoute()
-    const hasFilterParams = params.customer || params.fixVersion || params.status || params.product || params.tag
+    const hasFilterParams = params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey
     const initialView = (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || hasFilterParams) ? 'all-issues' : 'board'
     const filters = paramsToFilters(params)
 
@@ -350,8 +350,9 @@ async function handleSelectionChange(selection) {
   // Hide/show board selector based on view
   const boardSelectorContainer = document.getElementById('board-selector-container')
 
-  // If "All Sprints" is selected, switch to all-issues view
-  if (state.sprint?.id === 'all') {
+  // If "All Sprints" is selected AND sprints exist, switch to all-issues view
+  // If board has no sprints, stay in board view and show all issues from the board
+  if (state.sprint?.id === 'all' && selection.hasSprints) {
     state.currentView = 'all-issues'
     updateViewToggle()
 
@@ -367,7 +368,7 @@ async function handleSelectionChange(selection) {
     return
   }
 
-  // Show board selector for specific sprint selection
+  // Show board selector for specific sprint selection or boards without sprints
   if (boardSelectorContainer) {
     boardSelectorContainer.style.display = 'block'
   }
@@ -382,7 +383,7 @@ async function handleSelectionChange(selection) {
     updateViewToggle()
   }
 
-  // Load issues for the selected sprint (or all issues if no sprint)
+  // Load issues for the selected sprint (or all issues from board if no sprint)
   if (state.currentView === 'board') {
     await loadIssues()
   }
@@ -392,7 +393,12 @@ async function handleSelectionChange(selection) {
  * Load issues from selected board/sprint
  */
 async function loadIssues() {
-  if (!state.board) return
+  if (!state.board) {
+    console.log('[loadIssues] No board selected')
+    return
+  }
+
+  console.log('[loadIssues] Loading issues for board:', state.board, 'sprint:', state.sprint)
 
   // Cancel any previous in-flight request
   if (state.issuesAbortController) {
@@ -401,7 +407,10 @@ async function loadIssues() {
   state.issuesAbortController = new AbortController()
 
   const container = document.getElementById('issue-board-container')
-  if (!container) return
+  if (!container) {
+    console.log('[loadIssues] Container not found')
+    return
+  }
 
   container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading issues...</p></div>'
 
@@ -411,8 +420,11 @@ async function loadIssues() {
 
     // Skip update if request was aborted or container changed
     if (state.issuesAbortController.signal.aborted) {
+      console.log('[loadIssues] Request was aborted')
       return
     }
+
+    console.log('[loadIssues] Issues loaded successfully, columns:', issueBoard.columns.size)
 
     const currentContainer = document.getElementById('issue-board-container')
     if (currentContainer && currentContainer === container) {
@@ -424,6 +436,7 @@ async function loadIssues() {
       state.currentIssues = window.currentIssues
     }
   } catch (error) {
+    console.error('[loadIssues] Failed to load issues:', error)
     // Ignore abort errors (expected when canceling requests)
     if (error.name === 'AbortError') {
       return
@@ -669,6 +682,18 @@ function switchToBoardView() {
   const container = document.getElementById('issue-board-container')
   if (container) {
     container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading board view...</p></div>'
+  }
+
+  // If no board is selected, show a message to select one
+  if (!state.board) {
+    if (container) {
+      container.innerHTML = `
+        <div class="error-message" style="padding: 20px; text-align: center;">
+          <p>Please select a board from the dropdown above</p>
+        </div>
+      `
+    }
+    return
   }
 
   loadIssues()

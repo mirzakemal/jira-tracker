@@ -15,7 +15,8 @@ export class FilterPanel {
       assignee: [],
       reporter: [],
       qaTester: [],
-      tags: []
+      tags: [],
+      projects: []
     };
   }
 
@@ -65,6 +66,7 @@ export class FilterPanel {
         </div>
 
         <div class="filter-grid">
+          ${this.renderProjectFilter()}
           ${this.renderSearchFilter()}
           ${this.renderStatusFilter()}
           ${this.renderFixVersionFilter()}
@@ -89,6 +91,25 @@ export class FilterPanel {
           placeholder="Search by key or summary..."
           value="${this.escapeHtml(this.filters.searchQuery || '')}"
         />
+      </div>
+    `;
+  }
+
+  renderProjectFilter() {
+    const projects = this.availableFilters.projects || [];
+    const selected = this.filters.projectKey || '';
+
+    return `
+      <div class="filter-group">
+        <label for="project-filter">Project</label>
+        <select id="project-filter" class="filter-select">
+          <option value="">All Projects</option>
+          ${projects.map(p => `
+            <option value="${this.escapeHtml(p.key)}" ${selected === p.key ? 'selected' : ''}>
+              ${this.escapeHtml(p.name)} (${p.key})
+            </option>
+          `).join('')}
+        </select>
       </div>
     `;
   }
@@ -275,6 +296,13 @@ export class FilterPanel {
     const searchInput = document.getElementById('search-filter');
     searchInput?.addEventListener('input', (e) => {
       this.filters.searchQuery = e.target.value || null;
+      this.emitChange();
+    });
+
+    // Project filter
+    const projectSelect = document.getElementById('project-filter');
+    projectSelect?.addEventListener('change', (e) => {
+      this.filters.projectKey = e.target.value || null;
       this.emitChange();
     });
 

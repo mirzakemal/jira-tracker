@@ -101,8 +101,9 @@ export class BoardSelector {
       project: this.projects.find(p => p.key === this.selectedProject),
       board: this.boards.find(b => b.id === this.selectedBoard),
       sprint: this.selectedSprint === 'all'
-        ? { id: 'all', name: 'All Sprints (Past, Current & Future)' }
-        : (this.selectedSprint ? this.sprints.find(s => s.id === this.selectedSprint) : null)
+        ? { id: 'all', name: 'All Sprints (Past, Current & Future)', hasSprints: this.sprints.length > 0 }
+        : (this.selectedSprint ? this.sprints.find(s => s.id === this.selectedSprint) : null),
+      hasSprints: this.sprints.length > 0
     };
   }
 
