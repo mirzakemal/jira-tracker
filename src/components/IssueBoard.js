@@ -1,6 +1,6 @@
 /**
  * Issue Board Component (Kanban-style)
- * Displays issues grouped by status
+ * Displays issues grouped by status - READ ONLY
  */
 
 import { IssueCard } from './IssueCard.js';
@@ -11,11 +11,6 @@ export class IssueBoard {
     this.onIssueUpdate = onIssueUpdate;
     this.columns = new Map(); // status -> issues
     this.isLoading = false;
-    
-    // Bind handler methods for event delegation (prevents memory leaks)
-    this.boundHandleDragOver = this.handleDragOver.bind(this);
-    this.boundHandleDragLeave = this.handleDragLeave.bind(this);
-    this.boundHandleDrop = this.handleDrop.bind(this);
   }
 
   async loadIssues(board, sprint, options = {}) {
@@ -23,9 +18,10 @@ export class IssueBoard {
 
     try {
       // When fetching from a specific board, we only need to filter by sprint
-      // The board filter is implicit in the API endpoint
       let jql = null;
-      if (sprint) {
+
+      // If "All Sprints" is selected or no sprint, fetch all issues from the board
+      if (sprint && sprint.id !== 'all') {
         jql = `sprint = ${sprint.id}`;
       }
 
@@ -51,27 +47,6 @@ export class IssueBoard {
       }
       this.columns.set(status, [...this.columns.get(status), issue]);
     });
-  }
-
-  async transitionIssue(issueKey, toStatus) {
-    try {
-      const transitions = await this.client.getTransitions(issueKey);
-
-      // Find transition that matches the target status
-      const transition = transitions.find(t =>
-        t.to?.name === toStatus || t.to?.id === toStatus
-      );
-
-      if (transition) {
-        await this.client.transitionIssue(issueKey, transition.id);
-        return true;
-      }
-
-      throw new Error(`No valid transition to "${toStatus}"`);
-    } catch (error) {
-      console.error('Failed to transition issue:', error);
-      throw error;
-    }
   }
 
   render() {
@@ -128,21 +103,8 @@ export class IssueBoard {
   }
 
   bindEvents() {
-    // Use event delegation on the board container to prevent memory leaks
-    const board = document.querySelector('.board-columns');
-    if (!board) return;
-
-    // Remove old listeners if they exist (clean up before re-binding)
-    board.removeEventListener('dragover', this.boundHandleDragOver);
-    board.removeEventListener('dragleave', this.boundHandleDragLeave);
-    board.removeEventListener('drop', this.boundHandleDrop);
-
-    // Bind handlers
-    board.addEventListener('dragover', this.boundHandleDragOver);
-    board.addEventListener('dragleave', this.boundHandleDragLeave);
-    board.addEventListener('drop', this.boundHandleDrop);
-
-    // Bind card drag events
+    // Read-only board - no drag and drop events
+    // Just bind card click events to open in Jira
     document.querySelectorAll('.issue-card').forEach(card => {
       const issueKey = card.dataset.issueKey;
       const issue = window.currentIssues?.find(i => i.key === issueKey);
@@ -150,44 +112,6 @@ export class IssueBoard {
         IssueCard.bindDragEvents(card, issue);
       }
     });
-  }
-
-  handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const column = e.target.closest('.column-content');
-    if (column) {
-      column.classList.add('drag-over');
-    }
-  }
-
-  handleDragLeave(e) {
-    const column = e.target.closest('.column-content');
-    if (column && !column.contains(e.relatedTarget)) {
-      column.classList.remove('drag-over');
-    }
-  }
-
-  async handleDrop(e) {
-    e.preventDefault();
-    const column = e.target.closest('.column-content');
-    if (column) {
-      column.classList.remove('drag-over');
-
-      const issueKey = e.dataTransfer.getData('text/plain');
-      const toStatus = column.dataset.status;
-
-      if (issueKey && toStatus) {
-        try {
-          await this.transitionIssue(issueKey, toStatus);
-          if (this.onIssueUpdate) {
-            this.onIssueUpdate();
-          }
-        } catch (error) {
-          alert(`Failed to move issue: ${error.message}`);
-        }
-      }
-    }
   }
 
   escapeHtml(text) {

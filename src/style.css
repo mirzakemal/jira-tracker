@@ -1,15 +1,22 @@
 :root {
   --text: #6b6375;
   --text-h: #08060d;
+  --text-secondary: #6b6375;
   --bg: #fff;
+  --background: #fff;
+  --surface: #fff;
+  --hover: rgba(0, 0, 0, 0.05);
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
   --accent: #aa3bff;
+  --accent-hover: #9330db;
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --shadow-lg:
+    rgba(0, 0, 0, 0.15) 0 20px 25px -5px, rgba(0, 0, 0, 0.1) 0 8px 10px -6px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -34,15 +41,22 @@
   :root {
     --text: #9ca3af;
     --text-h: #f3f4f6;
+    --text-secondary: #9ca3af;
     --bg: #16171d;
+    --background: #16171d;
+    --surface: #1f2028;
+    --hover: rgba(255, 255, 255, 0.05);
     --border: #2e303a;
     --code-bg: #1f2028;
     --accent: #c084fc;
+    --accent-hover: #a855f7;
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --shadow-lg:
+      rgba(0, 0, 0, 0.5) 0 20px 25px -5px, rgba(0, 0, 0, 0.3) 0 8px 10px -6px;
   }
 
   #social .button-icon {

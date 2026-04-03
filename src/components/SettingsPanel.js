@@ -7,11 +7,11 @@ import { JiraClient, JiraError } from '../api/jira.js';
 import { loadCredentials, saveCredentials, clearCredentials } from '../utils/storage.js';
 
 export class SettingsPanel {
-  constructor(onConnect) {
+  constructor(onConnect, savedUser = null) {
     this.onConnect = onConnect;
     this.client = null;
-    this.isConnected = false;
-    this.user = null;
+    this.isConnected = !!savedUser;
+    this.user = savedUser;
   }
 
   render() {

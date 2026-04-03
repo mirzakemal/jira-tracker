@@ -51,17 +51,20 @@ export class BoardSelector {
   }
 
   async loadSprints(client, boardId = null) {
-    try {
-      const id = boardId || this.selectedBoard;
-      if (!id) {
-        this.sprints = [];
-        this.selectedSprint = null;
-        if (this.onSelectionChange) {
-          this.onSelectionChange(this.getSelection());
-        }
-        return;
+    const id = boardId || this.selectedBoard;
+    if (!id) {
+      this.sprints = [];
+      this.selectedSprint = null;
+      if (this.onSelectionChange) {
+        this.onSelectionChange(this.getSelection());
       }
+      return;
+    }
 
+    this.sprints = [];
+
+    // Try to load sprints - some board types don't support sprints
+    try {
       // First try to get active sprints
       this.sprints = await client.getSprints(id, 'active');
 
@@ -74,18 +77,22 @@ export class BoardSelector {
       if (this.sprints.length === 0) {
         this.sprints = await client.getSprints(id);
       }
-
-      // Select first sprint if available
-      if (this.sprints.length > 0 && !this.selectedSprint) {
-        this.selectedSprint = this.sprints[0].id;
-      }
-
-      if (this.onSelectionChange) {
-        this.onSelectionChange(this.getSelection());
-      }
     } catch (error) {
-      console.error('Failed to load sprints:', error);
+      // Board doesn't support sprints (e.g., Kanban board without sprints)
+      console.log(`[BoardSelector] Board ${id} does not support sprints, using "All Sprints" view`);
       this.sprints = [];
+    }
+
+    // Select first sprint if available, otherwise default to "All Sprints"
+    if (this.sprints.length > 0 && !this.selectedSprint) {
+      this.selectedSprint = this.sprints[0].id;
+    } else {
+      // No sprints available, default to "All Sprints" view
+      this.selectedSprint = 'all';
+    }
+
+    if (this.onSelectionChange) {
+      this.onSelectionChange(this.getSelection());
     }
   }
 
@@ -93,7 +100,9 @@ export class BoardSelector {
     return {
       project: this.projects.find(p => p.key === this.selectedProject),
       board: this.boards.find(b => b.id === this.selectedBoard),
-      sprint: this.sprints.find(s => s.id === this.selectedSprint)
+      sprint: this.selectedSprint === 'all'
+        ? { id: 'all', name: 'All Sprints (Past, Current & Future)' }
+        : (this.selectedSprint ? this.sprints.find(s => s.id === this.selectedSprint) : null)
     };
   }
 
@@ -136,10 +145,17 @@ export class BoardSelector {
 
           <div class="select-group">
             <label for="sprint-select">Sprint</label>
-            <select id="sprint-select" ${this.sprints.length === 0 ? 'disabled' : ''}>
+            <select id="sprint-select" ${this.sprints.length === 0 && this.selectedSprint !== 'all' ? 'disabled' : ''} class="${this.selectedSprint === 'all' ? 'all-sprints-selected' : ''}">
               ${this.sprints.length === 0
-                ? '<option value="">No sprints</option>'
-                : this.sprints.map(s => `
+                ? `<option value="all" ${!this.selectedSprint || this.selectedSprint === 'all' ? 'selected' : ''} class="all-sprints-option">
+                    📊 All Sprints (Past, Current & Future) - No sprints found
+                   </option>`
+                : `
+                    <option value="all" ${!this.selectedSprint ? 'selected' : ''} class="all-sprints-option">
+                      📊 All Sprints (Past, Current & Future)
+                    </option>
+                  ` +
+                  this.sprints.map(s => `
                     <option value="${s.id}" ${s.id === this.selectedSprint ? 'selected' : ''}>
                       ${s.name}
                     </option>
@@ -173,7 +189,8 @@ export class BoardSelector {
     });
 
     sprintSelect?.addEventListener('change', (e) => {
-      this.selectedSprint = e.target.value ? parseInt(e.target.value) : null;
+      const value = e.target.value;
+      this.selectedSprint = value === 'all' ? 'all' : (value ? parseInt(value) : null);
       if (this.onSelectionChange) {
         this.onSelectionChange(this.getSelection());
       }

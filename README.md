@@ -1,14 +1,28 @@
 # Jira Planner
 
-A modern, browser-based Jira planning tool with a Kanban-style board interface. Connect to your Jira Cloud instance and manage your sprint issues with an intuitive drag-and-drop interface.
+A modern, browser-based Jira planning tool with local IndexedDB storage. View your Jira issues in a Kanban board or table view with powerful filtering, custom tags, and shareable URLs. **Read-only** - all data is stored locally in your browser.
 
 ## Features
 
-- **Jira Cloud Integration**: Connect to your Jira Cloud instance using API tokens
+- **Local Storage (IndexedDB)**: All Jira data is cached locally - no writes to Jira
 - **Kanban Board**: View issues organized by status (To Do, In Progress, Done, etc.)
-- **Drag-and-Drop**: Move issues between columns to update their status
-- **Project/Board/Sprint Selection**: Navigate between your Jira projects and boards
-- **Create Issues**: Quickly create new issues from the board
+- **Table View**: Alternative grid view with customizable columns
+- **All Issues View**: See all sprints (past, current & future) in one place
+- **Advanced Filtering**:
+  - Status (multi-select)
+  - Fix Version
+  - Customer (customfield_10043)
+  - Product
+  - Assignee, Reporter, QA Tester
+  - Tags
+  - Search by key or summary
+  - To Be Tested By date
+  - Updated After date
+- **Custom Tags**: Add personal tags to issues for organization
+- **Saved Views**: Save and load filter/column configurations
+- **Shareable URLs**: Bookmark or share filtered views with URL parameters
+- **Auto-Connect**: Stay logged in across page refreshes
+- **Boards without Sprints**: Full support for Kanban boards without sprint configuration
 - **Dark/Light Mode**: Automatically adapts to your system preference
 
 ## Getting Started
@@ -45,59 +59,132 @@ The app will open at `http://localhost:5173`
    - Enter your email address
    - Enter your API token
    - Click "Connect"
+   - Credentials are saved - you'll auto-connect on future visits
 
 2. **Select Project & Board**:
    - Choose a project from the dropdown
    - Select a board
-   - Pick a sprint (active or future)
+   - Pick a sprint, or select "All Sprints (Past, Current & Future)"
 
-3. **Manage Issues**:
-   - Drag issues between columns to change their status
-   - Click "Create Issue" to add new issues
-   - Click the issue key to open in Jira
-   - Use "Refresh" to reload issues
+3. **View Issues**:
+   - **Kanban Board**: View issues by status (default)
+   - **All Issues**: Click "All Issues" button for table view with filters
+
+4. **Filter Issues** (All Issues view):
+   - Use the filter panel to narrow down issues
+   - Multiple filters can be combined
+   - Filters are reflected in the URL for sharing
+
+5. **Manage Tags**:
+   - Click on the Tags cell in any row to add/remove tags
+   - Tags are stored locally only
+
+6. **Save Views**:
+   - Configure your desired columns and filters
+   - Click "Save View" to store the configuration
+   - Load saved views later for quick access
+
+## URL Routing & Parameters
+
+The app uses hash-based routing for shareable URLs:
+
+```
+#/board                              - Kanban board view
+#/all-issues                         - All Issues table view
+#/all-issues?customer=Acme           - Filtered by customer
+#/all-issues?status=In%20Progress    - Filtered by status
+#/all-issues?fixVersion=v1.0         - Filtered by fix version
+#/all-issues?tag=urgent              - Filtered by tag
+#/all-issues?assigneeId=xxx          - Filtered by assignee
+```
+
+Multiple filters can be combined:
+```
+#/all-issues?customer=Acme&status=In%20Progress&status=To%20Do&fixVersion=v2.0
+```
+
+**Bookmark or share these URLs** - they preserve your view and filters on page refresh.
 
 ## Project Structure
 
 ```
 src/
 ├── api/
-│   └── jira.js           # Jira API client
+│   └── jira.js           # Jira API client (read-only)
 ├── components/
 │   ├── SettingsPanel.js  # Connection settings
 │   ├── BoardSelector.js  # Project/board/sprint selector
 │   ├── IssueBoard.js     # Kanban board component
 │   ├── IssueCard.js      # Individual issue card
-│   └── CreateIssueModal.js
+│   ├── AllIssuesView.js  # Table view with filters
+│   ├── TableView.js      # Configurable table component
+│   ├── FilterPanel.js    # Filter controls
+│   ├── TagsManager.js    # Tag management modal
+│   ├── SavedViewsMenu.js # Save/load view configurations
+│   └── SyncStatus.js     # Sync status indicator
+├── db/
+│   ├── indexeddb.js      # IndexedDB wrapper
+│   ├── sync.js           # Data synchronization from Jira
+│   └── queries.js        # Query helpers with filtering
 ├── utils/
-│   └── storage.js        # LocalStorage helpers
+│   ├── storage.js        # LocalStorage helpers (credentials)
+│   ├── router.js         # Hash-based routing
+│   └── debounce.js       # Debounce utility
 ├── main.js               # App entry point
 └── style.css             # Styles
 ```
 
+## Data Storage
+
+### IndexedDB (Local Data)
+All Jira data is stored locally in browser IndexedDB:
+- Projects, Boards, Sprints
+- Issues with all fields
+- Users (for display names)
+- Tags (your personal tags)
+- Saved Views
+
+**Data is read-only from Jira** - no changes are written back to Jira.
+
+### LocalStorage (Settings)
+- Jira credentials (domain, email, API token)
+- Last selected board/sprint
+
+## Sync Behavior
+
+- **Initial Connect**: Full sync of all projects, boards, sprints, and issues
+- **Page Refresh**: Incremental sync (last 30 days of updated issues)
+- **Manual Sync**: Click "Sync" button to force refresh data from Jira
+
+## Custom Fields
+
+The app extracts data from custom fields:
+- **customer**: `customfield_10043` (array or string)
+- **product**: Any custom field containing "product"
+- **qa_tester**: Any custom field containing "qa" or "tester"
+
 ## API Integration
 
-This app uses the Jira Cloud REST API:
+This app uses the Jira Cloud REST API (read-only):
 
 - **Authentication**: Basic Auth with email + API token
 - **Agile API**: For boards, sprints, and board issues
-- **REST API v3**: For issues, projects, and transitions
+- **REST API v3**: For issues and projects
 
 ### Key Endpoints
 
 - `GET /rest/api/3/myself` - Get current user
 - `GET /rest/api/3/project` - List projects
 - `GET /rest/agile/1.0/board` - List boards
+- `GET /rest/agile/1.0/board/{id}/sprint` - List sprints
 - `GET /rest/agile/1.0/board/{id}/issue` - Get board issues
-- `POST /rest/api/3/issue` - Create issue
-- `POST /rest/api/3/issue/{key}/transitions` - Transition issue
 
 ## Security Notes
 
 - Credentials are stored in browser localStorage
-- For enhanced security, use session-only mode (clear on close)
-- Never commit your API token to version control
+- All Jira data is stored in browser IndexedDB
 - The app runs entirely in your browser - no data is sent to third parties
+- Never commit your API token to version control
 
 ## Scripts
 
@@ -125,6 +212,15 @@ npm run preview  # Preview production build
 - Open browser console for error messages
 - Verify the selected board has issues
 - Check network tab for API response errors
+
+### Customer filter not showing values
+- Ensure `customfield_10043` exists in your Jira instance
+- Trigger a manual sync to refresh the data
+- Check browser console for sync logs
+
+### View resets to Kanban board on refresh
+- Check that the URL contains `#/all-issues` or filter parameters
+- The app should restore your last view based on the URL
 
 ## License
 
