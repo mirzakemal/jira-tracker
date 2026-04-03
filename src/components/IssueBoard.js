@@ -22,10 +22,11 @@ export class IssueBoard {
     this.isLoading = true;
 
     try {
-      let jql = `board = ${board.id}`;
-
+      // When fetching from a specific board, we only need to filter by sprint
+      // The board filter is implicit in the API endpoint
+      let jql = null;
       if (sprint) {
-        jql += ` AND sprint = ${sprint.id}`;
+        jql = `sprint = ${sprint.id}`;
       }
 
       const result = await this.client.getBoardIssues(board.id, jql, 0, 100, options);

@@ -147,7 +147,7 @@ async function loadIssues() {
     issueBoard.bindEvents()
 
     // Store issues globally for drag-and-drop
-    window.currentIssues = issueBoard.columns.values().flat()
+    window.currentIssues = Array.from(issueBoard.columns.values()).flat()
     state.currentIssues = window.currentIssues
   } catch (error) {
     // Ignore abort errors (expected when canceling requests)

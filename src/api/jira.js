@@ -11,14 +11,12 @@ class JiraClient {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new Error('Invalid email format');
     }
-    if (!domain.startsWith('https://') && !useProxy) {
-      console.warn('⚠️ Warning: Using non-HTTPS connection - credentials may be exposed');
-    }
     this.domain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
     this.email = email;
     this.apiToken = apiToken;
     // In development with Vite proxy, use relative URLs (empty baseUrl)
     // In production, use full Jira Cloud URL
+    this.useProxy = useProxy;
     this.baseUrl = useProxy ? '' : `https://${this.domain}`;
   }
 
