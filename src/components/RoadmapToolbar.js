@@ -4,14 +4,15 @@
  */
 
 export class RoadmapToolbar {
-  constructor(filters, onFilterChange) {
+  constructor(filters, onFilterChange, projects = []) {
     this.filters = filters || {
       startDate: this.getDefaultStartDate(),
       endDate: this.getDefaultEndDate(),
       groupBy: 'epic',
-      zoomLevel: 'month'
+      zoomLevel: 'week'
     };
     this.onFilterChange = onFilterChange;
+    this.projects = projects || [];
   }
 
   /**
@@ -37,6 +38,20 @@ export class RoadmapToolbar {
   render() {
     return `
       <div class="roadmap-toolbar" id="roadmap-toolbar">
+        <div class="toolbar-section">
+          <div class="toolbar-group">
+            <label for="roadmap-project">Project</label>
+            <select id="roadmap-project" class="toolbar-select">
+              <option value="">All Projects</option>
+              ${this.projects.map(p => `
+                <option value="${this.escapeHtml(p.key)}" ${this.filters.projectKey === p.key ? 'selected' : ''}>
+                  ${this.escapeHtml(p.key)}
+                </option>
+              `).join('')}
+            </select>
+          </div>
+        </div>
+
         <div class="toolbar-section">
           <div class="toolbar-group">
             <label for="roadmap-start-date">Start Date</label>
@@ -97,6 +112,16 @@ export class RoadmapToolbar {
   }
 
   /**
+   * Escape HTML
+   */
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
    * Refresh the component
    */
   refresh() {
@@ -111,6 +136,13 @@ export class RoadmapToolbar {
    * Bind event listeners
    */
   bindEvents() {
+    // Project select
+    const projectSelect = document.getElementById('roadmap-project');
+    projectSelect?.addEventListener('change', (e) => {
+      this.filters.projectKey = e.target.value;
+      this.emitChange();
+    });
+
     // Date inputs
     const startDateInput = document.getElementById('roadmap-start-date');
     const endDateInput = document.getElementById('roadmap-end-date');

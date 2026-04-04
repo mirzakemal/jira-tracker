@@ -15,6 +15,7 @@ import {
   getProducts,
   getAllUsers,
   getStatuses,
+  getIssueTypes,
   getAllTags,
   getTagsForIssues,
   invalidateFilterCache,
@@ -29,7 +30,7 @@ export class AllIssuesView {
     this.issues = [];
     this.filters = {};
     this.viewOptions = {
-      columns: ['key', 'tags', 'summary', 'status', 'priority', 'assignee_name', 'reporter_name', 'qa_tester_name', 'fix_version', 'customer', 'product'],
+      columns: ['key', 'issue_type', 'tags', 'summary', 'status', 'priority', 'assignee_name', 'code_reviewer_1_name', 'code_reviewer_2_name', 'fix_version'],
       sortField: 'updated_at',
       sortDirection: 'desc'
     };
@@ -142,6 +143,9 @@ export class AllIssuesView {
       assignee: await getAllUsers(),
       reporter: await getAllUsers(),
       qaTester: await getAllUsers(),
+      codeReviewer1: await getAllUsers(),
+      codeReviewer2: await getAllUsers(),
+      issueType: await getIssueTypes(),
       tags: await getAllTags()
     };
   }
@@ -326,7 +330,7 @@ export class AllIssuesView {
    */
   openIssue(issueKey) {
     const url = this.jiraDomain
-      ? `https://${this.jiraDomain}/browse/${issueKey}`
+      ? `https://${this.jiraDomain.replace(/^https?:\/\//, '')}/browse/${issueKey}`
       : `/browse/${issueKey}`;
     window.open(url, '_blank');
   }

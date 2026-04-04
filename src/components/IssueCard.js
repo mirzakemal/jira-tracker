@@ -21,7 +21,7 @@ export class IssueCard {
           <span class="issue-type-icon" title="${this.escapeHtml(fields.issuetype?.name || 'Issue')}">
             ${issueTypeIcon}
           </span>
-          <a href="https://${window.jiraDomain}/browse/${key}" target="_blank" class="issue-key" onclick="event.stopPropagation()">
+          <a href="https://${(window.jiraDomain || '').replace(/^https?:\/\//, '')}/browse/${key}" target="_blank" class="issue-key" onclick="event.stopPropagation()">
             ${key}
           </a>
         </div>
@@ -100,7 +100,7 @@ export class IssueCard {
       // Open issue in Jira in new tab
       const issueKey = card.dataset.issueKey;
       if (issueKey && window.jiraDomain) {
-        window.open(`https://${window.jiraDomain}/browse/${issueKey}`, '_blank');
+        window.open(`https://${(window.jiraDomain || '').replace(/^https?:\/\//, '')}/browse/${issueKey}`, '_blank');
       }
     });
   }

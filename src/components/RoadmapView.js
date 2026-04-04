@@ -8,7 +8,7 @@ import { RoadmapTimeline, RoadmapTimelineStyles } from './RoadmapTimeline.js';
 import { FilterPanelStyles } from './FilterPanel.js';
 import { TagsManagerStyles } from './TagsManager.js';
 import { SavedViewsMenuStyles } from './SavedViewsMenu.js';
-import { getRoadmapData, getEpicsOrThemes, getSprintsInDateRange } from '../db/queries.js';
+import { getRoadmapData, getEpicsOrThemes, getSprintsInDateRange, getAllProjects } from '../db/queries.js';
 
 export class RoadmapView {
   constructor(client, jiraDomain, onBack) {
@@ -16,11 +16,12 @@ export class RoadmapView {
     this.jiraDomain = jiraDomain;
     this.onBack = onBack;
     this.roadmapData = null;
+    this.projects = [];
     this.filters = {
       startDate: this.getDefaultStartDate(),
       endDate: this.getDefaultEndDate(),
       groupBy: 'epic',
-      zoomLevel: 'month'
+      zoomLevel: 'week'
     };
     this.isLoading = false;
   }
@@ -53,7 +54,14 @@ export class RoadmapView {
     this.refresh();
 
     try {
-      this.roadmapData = await getRoadmapData(this.filters);
+      // Load projects and roadmap data in parallel
+      const [roadmapData, projects] = await Promise.all([
+        getRoadmapData(this.filters),
+        getAllProjects()
+      ]);
+
+      this.roadmapData = roadmapData;
+      this.projects = projects;
       this.isLoading = false;
       this.refresh();
 
@@ -93,7 +101,7 @@ export class RoadmapView {
    */
   openIssue(issueKey) {
     const url = this.jiraDomain
-      ? `https://${this.jiraDomain}/browse/${issueKey}`
+      ? `https://${this.jiraDomain.replace(/^https?:\/\//, '')}/browse/${issueKey}`
       : `/browse/${issueKey}`;
     window.open(url, '_blank');
   }
@@ -149,7 +157,7 @@ export class RoadmapView {
     // Render Toolbar
     const toolbarContainer = document.getElementById('roadmap-toolbar-container');
     if (toolbarContainer) {
-      const toolbar = new RoadmapToolbar(this.filters, (newFilters) => this.handleFilterChange(newFilters));
+      const toolbar = new RoadmapToolbar(this.filters, (newFilters) => this.handleFilterChange(newFilters), this.projects);
       toolbarContainer.innerHTML = toolbar.render();
       toolbar.bindEvents();
     }

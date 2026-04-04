@@ -149,15 +149,22 @@ async function syncSprintsForBoard(client, boardId) {
     console.log(`[Sync] No completed sprints for board ${boardId}`);
   }
 
-  const sprintsToUpdate = allSprints.map(sprint => ({
-    id: sprint.id,
-    board_id: boardId,
-    name: sprint.name,
-    state: sprint.state,
-    start_date: sprint.startDate || null,
-    end_date: sprint.endDate || null,
-    syncedAt: new Date().toISOString()
-  }));
+  const sprintsToUpdate = allSprints.map(sprint => {
+    // Debug: log sprint date fields to verify format
+    console.log('[Sync] Sprint:', sprint.name, '| id:', sprint.id);
+    console.log('[Sync]   startDate:', sprint.startDate, '| endDate:', sprint.endDate);
+    console.log('[Sync]   start_date:', sprint.start_date, '| end_date:', sprint.end_date);
+
+    return ({
+      id: sprint.id,
+      board_id: boardId,
+      name: sprint.name,
+      state: sprint.state,
+      start_date: sprint.startDate || null,
+      end_date: sprint.endDate || null,
+      syncedAt: new Date().toISOString()
+    });
+  });
 
   await putBulk(STORES.SPRINTS, sprintsToUpdate);
   console.log(`[Sync] Synced ${allSprints.length} sprints for board ${boardId}`);
@@ -362,6 +369,17 @@ async function upsertIssues(issues, boardId, sprintId) {
         if (fieldName.includes('qa') || fieldName.includes('tester')) {
           qaTesterId = value?.accountId || null;
         }
+        // Code reviewer fields
+        if (fieldName === 'customfield_10044') {
+          // Code Reviewer #1
+          issue.code_reviewer_1_id = value?.accountId || null;
+          issue.code_reviewer_1_name = value?.displayName || null;
+        }
+        if (fieldName === 'customfield_10313') {
+          // Code Reviewer #2
+          issue.code_reviewer_2_id = value?.accountId || null;
+          issue.code_reviewer_2_name = value?.displayName || null;
+        }
       }
     }
 
@@ -376,7 +394,13 @@ async function upsertIssues(issues, boardId, sprintId) {
       priority: fields.priority?.name || null,
       issue_type: fields.issuetype?.name || null,
       reporter_id: fields.reporter?.accountId || null,
+      reporter_name: fields.reporter?.displayName || null,
       assignee_id: fields.assignee?.accountId || null,
+      assignee_name: fields.assignee?.displayName || null,
+      code_reviewer_1_id: issue.code_reviewer_1_id || null,
+      code_reviewer_1_name: issue.code_reviewer_1_name || null,
+      code_reviewer_2_id: issue.code_reviewer_2_id || null,
+      code_reviewer_2_name: issue.code_reviewer_2_name || null,
       reviewer_ids: fields.commenters?.map(c => c.accountId).join(',') || null,
       created_at: fields.created || null,
       updated_at: fields.updated || null,

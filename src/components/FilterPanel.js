@@ -69,6 +69,7 @@ export class FilterPanel {
           ${this.renderProjectFilter()}
           ${this.renderSearchFilter()}
           ${this.renderStatusFilter()}
+          ${this.renderIssueTypeFilter()}
           ${this.renderFixVersionFilter()}
           ${this.renderCustomerFilter()}
           ${this.renderProductFilter()}
@@ -152,6 +153,25 @@ export class FilterPanel {
     `;
   }
 
+  renderIssueTypeFilter() {
+    const issueTypes = this.availableFilters.issueType || [];
+    const selected = this.filters.issueType || '';
+
+    return `
+      <div class="filter-group">
+        <label for="issue-type-filter">Card Type</label>
+        <select id="issue-type-filter" class="filter-select">
+          <option value="">All Types</option>
+          ${issueTypes.map(t => `
+            <option value="${this.escapeHtml(t)}" ${selected === t ? 'selected' : ''}>
+              ${this.escapeHtml(t)}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+    `;
+  }
+
   renderCustomerFilter() {
     const customers = this.availableFilters.customer || [];
     const selected = this.filters.customer || '';
@@ -194,6 +214,8 @@ export class FilterPanel {
     const assignees = this.availableFilters.assignee || [];
     const reporters = this.availableFilters.reporter || [];
     const qaTesters = this.availableFilters.qaTester || [];
+    const codeReviewers1 = this.availableFilters.codeReviewer1 || [];
+    const codeReviewers2 = this.availableFilters.codeReviewer2 || [];
 
     return `
       <div class="filter-group">
@@ -227,6 +249,30 @@ export class FilterPanel {
           ${qaTesters.map(q => `
             <option value="${this.escapeHtml(q.account_id || q.accountId)}" ${this.filters.qaTesterId === (q.account_id || q.accountId) ? 'selected' : ''}>
               ${this.escapeHtml(q.display_name || q.displayName)}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="code-reviewer-1-filter">Code Reviewer #1</label>
+        <select id="code-reviewer-1-filter" class="filter-select">
+          <option value="">All Reviewers</option>
+          ${codeReviewers1.map(r => `
+            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${this.filters.codeReviewer1Id === (r.account_id || r.accountId) ? 'selected' : ''}>
+              ${this.escapeHtml(r.display_name || r.displayName)}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="code-reviewer-2-filter">Code Reviewer #2</label>
+        <select id="code-reviewer-2-filter" class="filter-select">
+          <option value="">All Reviewers</option>
+          ${codeReviewers2.map(r => `
+            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${this.filters.codeReviewer2Id === (r.account_id || r.accountId) ? 'selected' : ''}>
+              ${this.escapeHtml(r.display_name || r.displayName)}
             </option>
           `).join('')}
         </select>
@@ -325,6 +371,13 @@ export class FilterPanel {
       this.emitChange();
     });
 
+    // Issue Type (Card Type) filter
+    const issueTypeSelect = document.getElementById('issue-type-filter');
+    issueTypeSelect?.addEventListener('change', (e) => {
+      this.filters.issueType = e.target.value || null;
+      this.emitChange();
+    });
+
     // Customer filter
     const customerSelect = document.getElementById('customer-filter');
     customerSelect?.addEventListener('change', (e) => {
@@ -357,6 +410,20 @@ export class FilterPanel {
     const qaTesterSelect = document.getElementById('qa-tester-filter');
     qaTesterSelect?.addEventListener('change', (e) => {
       this.filters.qaTesterId = e.target.value || null;
+      this.emitChange();
+    });
+
+    // Code Reviewer #1 filter
+    const codeReviewer1Select = document.getElementById('code-reviewer-1-filter');
+    codeReviewer1Select?.addEventListener('change', (e) => {
+      this.filters.codeReviewer1Id = e.target.value || null;
+      this.emitChange();
+    });
+
+    // Code Reviewer #2 filter
+    const codeReviewer2Select = document.getElementById('code-reviewer-2-filter');
+    codeReviewer2Select?.addEventListener('change', (e) => {
+      this.filters.codeReviewer2Id = e.target.value || null;
       this.emitChange();
     });
 

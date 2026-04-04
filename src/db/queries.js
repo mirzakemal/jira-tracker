@@ -52,6 +52,7 @@ export function invalidateFilterCache() {
   filterOptionsCache = {
     statuses: null,
     fixVersions: null,
+    issueTypes: null,
     customers: null,
     products: null,
     users: null,
@@ -120,6 +121,9 @@ export async function getAllIssues(filters = {}) {
     if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
     if (filters.reporterId && issue.reporter_id !== filters.reporterId) return false;
     if (filters.qaTesterId && issue.qa_tester_id !== filters.qaTesterId) return false;
+    if (filters.codeReviewer1Id && issue.code_reviewer_1_id !== filters.codeReviewer1Id) return false;
+    if (filters.codeReviewer2Id && issue.code_reviewer_2_id !== filters.codeReviewer2Id) return false;
+    if (filters.issueType && issue.issue_type !== filters.issueType) return false;
 
     // Date filters
     if (filters.updatedAfter) {
@@ -153,7 +157,9 @@ export async function getAllIssues(filters = {}) {
     ...issue,
     assignee_name: issue.assignee_id ? (userMap.get(issue.assignee_id) || 'Unassigned') : null,
     reporter_name: issue.reporter_id ? (userMap.get(issue.reporter_id) || 'Unknown') : null,
-    qa_tester_name: issue.qa_tester_id ? (userMap.get(issue.qa_tester_id) || null) : null
+    qa_tester_name: issue.qa_tester_id ? (userMap.get(issue.qa_tester_id) || null) : null,
+    code_reviewer_1_name: issue.code_reviewer_1_id ? (userMap.get(issue.code_reviewer_1_id) || null) : null,
+    code_reviewer_2_name: issue.code_reviewer_2_id ? (userMap.get(issue.code_reviewer_2_id) || null) : null
   }));
 
   // Load all tags in a single query
@@ -329,6 +335,27 @@ export async function getStatuses() {
   filterOptionsCache.statuses = statuses;
   filterOptionsCache.timestamp = Date.now();
   return statuses;
+}
+
+/**
+ * Get all issue types (Card Types) - uses cache
+ */
+export async function getIssueTypes(projectKey = null) {
+  if (isCacheValid() && filterOptionsCache.issueTypes !== null) {
+    return filterOptionsCache.issueTypes;
+  }
+
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+  const types = [...new Set(
+    issues
+      .filter(i => i.issue_type && (!projectKey || i.project_key === projectKey))
+      .map(i => i.issue_type)
+  )].sort();
+
+  filterOptionsCache.issueTypes = types;
+  filterOptionsCache.timestamp = Date.now();
+  return types;
 }
 
 /**
@@ -573,7 +600,7 @@ export async function getRoadmapIssues(filters = {}) {
   // Get all issues and filter by date range
   const issues = await getAll(STORES.ISSUES);
 
-  // Calculate date range (default: next 3 months)
+  // Calculate date range (default: today to next 3 months)
   const today = new Date();
   const startDate = filters.startDate
     ? new Date(filters.startDate)
@@ -594,39 +621,56 @@ export async function getRoadmapIssues(filters = {}) {
     const hasDueInRange = issueDue && issueDue >= startDate && issueDue <= endDate;
     const hasEndInRange = issueEnd && issueEnd >= startDate && issueEnd <= endDate;
 
-    // Include issue if any date field is in range, or if no dates but has sprint
-    if (!hasStartInRange && !hasDueInRange && !hasEndInRange) {
-      return issue.sprint_id && !issue.due_date && !issue.start_date;
+    // Include issue if any date field is in range
+    if (hasStartInRange || hasDueInRange || hasEndInRange) {
+      // Apply other filters
+      if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
+      if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
+      if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
+      if (filters.customer) {
+        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+        if (!issueCustomers.includes(filters.customer)) return false;
+      }
+      if (filters.product && issue.product !== filters.product) return false;
+      if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
+      if (filters.tag) {
+        const issueTags = filters.issueTags?.[issue.key] || [];
+        if (!issueTags.includes(filters.tag)) return false;
+      }
+      return true;
     }
 
-    // Apply other filters
-    if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
-    if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
-    if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
-    if (filters.customer) {
-      const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
-      if (!issueCustomers.includes(filters.customer)) return false;
-    }
-    if (filters.product && issue.product !== filters.product) return false;
-    if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
-    if (filters.tag) {
-      const issueTags = filters.issueTags?.[issue.key] || [];
-      if (!issueTags.includes(filters.tag)) return false;
+    // Also include issues with sprint_id (to show issues in sprints)
+    if (issue.sprint_id) {
+      if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
+      if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
+      if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
+      if (filters.customer) {
+        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+        if (!issueCustomers.includes(filters.customer)) return false;
+      }
+      if (filters.product && issue.product !== filters.product) return false;
+      if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
+      if (filters.tag) {
+        const issueTags = filters.issueTags?.[issue.key] || [];
+        if (!issueTags.includes(filters.tag)) return false;
+      }
+      return true;
     }
 
-    return true;
+    return false;
   });
 
-  // Load users for enrichment
+  // Load users for enrichment (fallback if assignee_name not stored)
   const users = await getAll(STORES.USERS);
   const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
 
-  // Enrich issues with user names and parent info
+  // Enrich issues with user names (use stored name or lookup from users store)
   const enrichedIssues = filteredIssues.map(issue => ({
     ...issue,
-    assignee_name: issue.assignee_id ? (userMap.get(issue.assignee_id) || 'Unassigned') : null,
-    reporter_name: issue.reporter_id ? (userMap.get(issue.reporter_id) || 'Unknown') : null,
-    qa_tester_name: issue.qa_tester_id ? (userMap.get(issue.qa_tester_id) || null) : null
+    assignee_name: issue.assignee_name || (issue.assignee_id ? (userMap.get(issue.assignee_id) || issue.assignee_id || 'Unassigned') : 'Unassigned'),
+    reporter_name: issue.reporter_name || (issue.reporter_id ? (userMap.get(issue.reporter_id) || issue.reporter_id || 'Unknown') : 'Unknown'),
+    qa_tester_name: issue.qa_tester_name || (issue.qa_tester_id ? (userMap.get(issue.qa_tester_id) || issue.qa_tester_id || null) : null)
   }));
 
   // Load tags
@@ -714,9 +758,9 @@ export async function getSprintsInDateRange(startDate, endDate) {
     if (sprintEnd && sprintEnd < start) return false;
     return true;
   }).sort((a, b) => {
-    const aStart = a.start_date ? new Date(a.start_date).getTime() : 0;
-    const bStart = b.start_date ? new Date(b.start_date).getTime() : 0;
-    return aStart - bStart;
+    const dateA = a.start_date ? new Date(a.start_date).getTime() : 0;
+    const dateB = b.start_date ? new Date(b.start_date).getTime() : 0;
+    return dateA - dateB;
   });
 }
 
@@ -870,22 +914,37 @@ export async function getRoadmapData(filters = {}) {
       break;
 
     case 'assignee':
-      // Group by assignee
-      const users = await getAll(STORES.USERS);
-      const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
-      const assignees = [...new Set(issues.map(i => i.assignee_id || 'unassigned'))];
-      groups = assignees.map(id => ({
-        key: `assignee-${id || 'unassigned'}`,
-        name: id ? (userMap.get(id) || 'Unassigned') : 'Unassigned',
+      // Group by assignee - use assignee_name from enriched issues
+      // Build a map of assignee_id to assignee_name
+      const assigneeMap = new Map();
+      issues.forEach(issue => {
+        const id = issue.assignee_id || 'unassigned';
+        const name = issue.assignee_name || 'Unassigned';
+        assigneeMap.set(id, name);
+      });
+
+      console.log('[RoadmapData] Assignee grouping - sample issues:', issues.slice(0, 5).map(i => ({
+        key: i.key,
+        assignee_id: i.assignee_id,
+        assignee_name: i.assignee_name
+      })));
+      console.log('[RoadmapData] Assignee map:', Object.fromEntries(assigneeMap));
+
+      const uniqueAssigneeIds = [...new Set(issues.map(i => i.assignee_id || 'unassigned'))];
+      groups = uniqueAssigneeIds.map(id => ({
+        key: `assignee-${id}`,
+        name: assigneeMap.get(id),
         is_assignee: true
       }));
 
-      assignees.forEach(assigneeId => {
-        const key = `assignee-${assigneeId || 'unassigned'}`;
+      console.log('[RoadmapData] Groups created:', groups);
+
+      uniqueAssigneeIds.forEach(assigneeId => {
+        const key = `assignee-${assigneeId}`;
         issuesByGroup[key] = {
           epic: {
             key,
-            name: assigneeId ? (userMap.get(assigneeId) || 'Unassigned') : 'Unassigned',
+            name: assigneeMap.get(assigneeId),
             is_assignee: true
           },
           issues: []

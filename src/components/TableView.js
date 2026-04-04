@@ -19,7 +19,7 @@ export class TableView {
    * Get default columns
    */
   getDefaultColumns() {
-    return ['key', 'tags', 'summary', 'status', 'priority', 'assignee_name', 'fix_version'];
+    return ['key', 'issue_type', 'tags', 'summary', 'status', 'priority', 'assignee_name', 'code_reviewer_1_name', 'code_reviewer_2_name', 'fix_version'];
   }
 
   /**
@@ -34,6 +34,8 @@ export class TableView {
       { id: 'issue_type', label: 'Type' },
       { id: 'reporter_name', label: 'Reporter' },
       { id: 'assignee_name', label: 'Assignee' },
+      { id: 'code_reviewer_1_name', label: 'Code Reviewer #1' },
+      { id: 'code_reviewer_2_name', label: 'Code Reviewer #2' },
       { id: 'reviewers', label: 'Reviewers' },
       { id: 'qa_tester_name', label: 'QA Tester' },
       { id: 'fix_version', label: 'Fix Version' },
@@ -215,10 +217,10 @@ export class TableView {
         <div class="column-customizer" id="column-customizer" style="display: none;">
           <div class="column-customizer-content">
             <h4>Customize Columns</h4>
-            <p class="customizer-note">Key and Tags columns are always shown</p>
+            <p class="customizer-note">Key, Type, Tags, and Code Reviewer columns are always shown</p>
             <div class="column-options">
               ${availableColumns.map(col => {
-                const isPermanent = col.id === 'key' || col.id === 'tags';
+                const isPermanent = col.id === 'key' || col.id === 'issue_type' || col.id === 'tags' || col.id === 'code_reviewer_1_name' || col.id === 'code_reviewer_2_name';
                 return `
                   <label class="column-option ${isPermanent ? 'disabled' : ''}">
                     <input
@@ -256,7 +258,7 @@ export class TableView {
         `).join('')}
         <td class="table-cell actions">
           <a
-            href="${this.jiraDomain ? `https://${this.jiraDomain}` : ''}${issue.jira_url || `/browse/${issue.key}`}"
+            href="${this.jiraDomain ? `https://${this.jiraDomain.replace(/^https?:\/\//, '')}` : ''}${issue.jira_url || `/browse/${issue.key}`}"
             target="_blank"
             rel="noopener"
             class="issue-link"
@@ -291,7 +293,7 @@ export class TableView {
         return `<span class="issue-key">${this.escapeHtml(value)}</span>`;
 
       case 'summary':
-        return `<span class="issue-summary">${this.escapeHtml(value)}</span>`;
+        return `<span class="issue-summary" title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</span>`;
 
       case 'priority':
         return `<span class="priority-badge ${this.getPriorityClass(value)}">${this.escapeHtml(value)}</span>`;
@@ -307,7 +309,12 @@ export class TableView {
       case 'assignee_name':
       case 'reporter_name':
       case 'qa_tester_name':
+      case 'code_reviewer_1_name':
+      case 'code_reviewer_2_name':
         return `<span class="user-badge">👤 ${this.escapeHtml(value)}</span>`;
+
+      case 'issue_type':
+        return `<span class="issue-type-badge">${this.escapeHtml(value)}</span>`;
 
       case 'reviewers':
         // Reviewers are stored as comma-separated account IDs
@@ -374,7 +381,7 @@ export class TableView {
           .map(cb => cb.value);
 
         // Ensure permanent columns are always included
-        const permanentColumns = ['key', 'tags'];
+        const permanentColumns = ['key', 'issue_type', 'tags', 'code_reviewer_1_name', 'code_reviewer_2_name'];
         for (const col of permanentColumns) {
           if (!selectedColumns.includes(col)) {
             selectedColumns.unshift(col);
@@ -765,7 +772,7 @@ export const TableViewStyles = `
   }
 
   .table-cell.summary {
-    max-width: 500px;
+    max-width: 250px;
   }
 
   .table-cell.actions {
@@ -791,6 +798,12 @@ export const TableViewStyles = `
 
   .issue-summary {
     color: var(--text);
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    cursor: help;
   }
 
   .status-badge {
@@ -819,6 +832,15 @@ export const TableViewStyles = `
     display: flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
+  }
+
+  .issue-type-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: var(--hover);
+    border-radius: 4px;
+    font-size: 12px;
     white-space: nowrap;
   }
 
