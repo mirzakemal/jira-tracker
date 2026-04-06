@@ -71,22 +71,29 @@ export async function getAllIssues(filters = {}) {
   // Start with an index-guided query if we have a selective filter
   let issues;
 
-  // Use the most selective index if available
+  // Use the most selective index if available (only for single values)
+  // For multi-select filters, get all issues and filter in JavaScript
   if (filters.status && filters.status.length === 1) {
     // Single status filter - use status index
     issues = await getByIndex(STORES.ISSUES, 'status', filters.status[0]);
-  } else if (filters.fixVersion) {
-    issues = await getByIndex(STORES.ISSUES, 'fix_version', filters.fixVersion);
-  } else if (filters.customer) {
-    issues = await getByIndex(STORES.ISSUES, 'customer', filters.customer);
-  } else if (filters.product) {
-    issues = await getByIndex(STORES.ISSUES, 'product', filters.product);
-  } else if (filters.assigneeId) {
-    issues = await getByIndex(STORES.ISSUES, 'assignee_id', filters.assigneeId);
-  } else if (filters.reporterId) {
-    issues = await getByIndex(STORES.ISSUES, 'reporter_id', filters.reporterId);
-  } else if (filters.qaTesterId) {
-    issues = await getByIndex(STORES.ISSUES, 'qa_tester_id', filters.qaTesterId);
+  } else if (filters.fixVersion && (!Array.isArray(filters.fixVersion) || filters.fixVersion.length === 1)) {
+    const fixVersionValue = Array.isArray(filters.fixVersion) ? filters.fixVersion[0] : filters.fixVersion;
+    issues = await getByIndex(STORES.ISSUES, 'fix_version', fixVersionValue);
+  } else if (filters.customer && (!Array.isArray(filters.customer) || filters.customer.length === 1)) {
+    const customerValue = Array.isArray(filters.customer) ? filters.customer[0] : filters.customer;
+    issues = await getByIndex(STORES.ISSUES, 'customer', customerValue);
+  } else if (filters.product && (!Array.isArray(filters.product) || filters.product.length === 1)) {
+    const productValue = Array.isArray(filters.product) ? filters.product[0] : filters.product;
+    issues = await getByIndex(STORES.ISSUES, 'product', productValue);
+  } else if (filters.assigneeId && (!Array.isArray(filters.assigneeId) || filters.assigneeId.length === 1)) {
+    const assigneeIdValue = Array.isArray(filters.assigneeId) ? filters.assigneeId[0] : filters.assigneeId;
+    issues = await getByIndex(STORES.ISSUES, 'assignee_id', assigneeIdValue);
+  } else if (filters.reporterId && (!Array.isArray(filters.reporterId) || filters.reporterId.length === 1)) {
+    const reporterIdValue = Array.isArray(filters.reporterId) ? filters.reporterId[0] : filters.reporterId;
+    issues = await getByIndex(STORES.ISSUES, 'reporter_id', reporterIdValue);
+  } else if (filters.qaTesterId && (!Array.isArray(filters.qaTesterId) || filters.qaTesterId.length === 1)) {
+    const qaTesterIdValue = Array.isArray(filters.qaTesterId) ? filters.qaTesterId[0] : filters.qaTesterId;
+    issues = await getByIndex(STORES.ISSUES, 'qa_tester_id', qaTesterIdValue);
   } else if (filters.boardId) {
     // Board ID is commonly used, check this next
     issues = await getAllFiltered(STORES.ISSUES, (issue) => issue.board_id === filters.boardId);
@@ -111,19 +118,51 @@ export async function getAllIssues(filters = {}) {
       if (!filters.status.includes(issue.status)) return false;
     }
 
-    // Single-value filters (already used as index if sole filter)
-    if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
-    if (filters.customer) {
-      const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
-      if (!issueCustomers.includes(filters.customer)) return false;
+    // Multi-select fixVersion filter
+    if (filters.fixVersion && Array.isArray(filters.fixVersion) && filters.fixVersion.length > 0) {
+      if (!filters.fixVersion.includes(issue.fix_version)) return false;
     }
-    if (filters.product && issue.product !== filters.product) return false;
-    if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
-    if (filters.reporterId && issue.reporter_id !== filters.reporterId) return false;
-    if (filters.qaTesterId && issue.qa_tester_id !== filters.qaTesterId) return false;
-    if (filters.codeReviewer1Id && issue.code_reviewer_1_id !== filters.codeReviewer1Id) return false;
-    if (filters.codeReviewer2Id && issue.code_reviewer_2_id !== filters.codeReviewer2Id) return false;
-    if (filters.issueType && issue.issue_type !== filters.issueType) return false;
+
+    // Multi-select customer filter
+    if (filters.customer && Array.isArray(filters.customer) && filters.customer.length > 0) {
+      const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+      if (!filters.customer.some(c => issueCustomers.includes(c))) return false;
+    }
+
+    // Multi-select product filter
+    if (filters.product && Array.isArray(filters.product) && filters.product.length > 0) {
+      if (!filters.product.includes(issue.product)) return false;
+    }
+
+    // Multi-select assignee filter
+    if (filters.assigneeId && Array.isArray(filters.assigneeId) && filters.assigneeId.length > 0) {
+      if (!filters.assigneeId.includes(issue.assignee_id)) return false;
+    }
+
+    // Multi-select reporter filter
+    if (filters.reporterId && Array.isArray(filters.reporterId) && filters.reporterId.length > 0) {
+      if (!filters.reporterId.includes(issue.reporter_id)) return false;
+    }
+
+    // Multi-select qaTester filter
+    if (filters.qaTesterId && Array.isArray(filters.qaTesterId) && filters.qaTesterId.length > 0) {
+      if (!filters.qaTesterId.includes(issue.qa_tester_id)) return false;
+    }
+
+    // Multi-select codeReviewer1 filter
+    if (filters.codeReviewer1Id && Array.isArray(filters.codeReviewer1Id) && filters.codeReviewer1Id.length > 0) {
+      if (!filters.codeReviewer1Id.includes(issue.code_reviewer_1_id)) return false;
+    }
+
+    // Multi-select codeReviewer2 filter
+    if (filters.codeReviewer2Id && Array.isArray(filters.codeReviewer2Id) && filters.codeReviewer2Id.length > 0) {
+      if (!filters.codeReviewer2Id.includes(issue.code_reviewer_2_id)) return false;
+    }
+
+    // Multi-select issueType filter
+    if (filters.issueType && Array.isArray(filters.issueType) && filters.issueType.length > 0) {
+      if (!filters.issueType.includes(issue.issue_type)) return false;
+    }
 
     // Date filters
     if (filters.updatedAfter) {
@@ -177,8 +216,12 @@ export async function getAllIssues(filters = {}) {
     const tags = tagsByIssue.get(issue.key) || [];
     issue.tags = tags;
 
-    if (filters.tag && !tags.includes(filters.tag)) {
-      return false;
+    if (filters.tag && Array.isArray(filters.tag) && filters.tag.length > 0) {
+      // Multi-select tag filter - OR logic
+      if (!filters.tag.some(t => tags.includes(t))) return false;
+    } else if (filters.tag && !Array.isArray(filters.tag)) {
+      // Legacy single tag filter
+      if (!tags.includes(filters.tag)) return false;
     }
     return true;
   });
@@ -626,14 +669,23 @@ export async function getRoadmapIssues(filters = {}) {
       // Apply other filters
       if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
       if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
-      if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
-      if (filters.customer) {
-        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
-        if (!issueCustomers.includes(filters.customer)) return false;
+      if (filters.fixVersion && Array.isArray(filters.fixVersion) && filters.fixVersion.length > 0) {
+        if (!filters.fixVersion.includes(issue.fix_version)) return false;
       }
-      if (filters.product && issue.product !== filters.product) return false;
-      if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
-      if (filters.tag) {
+      if (filters.customer && Array.isArray(filters.customer) && filters.customer.length > 0) {
+        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+        if (!filters.customer.some(c => issueCustomers.includes(c))) return false;
+      }
+      if (filters.product && Array.isArray(filters.product) && filters.product.length > 0) {
+        if (!filters.product.includes(issue.product)) return false;
+      }
+      if (filters.assigneeId && Array.isArray(filters.assigneeId) && filters.assigneeId.length > 0) {
+        if (!filters.assigneeId.includes(issue.assignee_id)) return false;
+      }
+      if (filters.tag && Array.isArray(filters.tag) && filters.tag.length > 0) {
+        const issueTags = filters.issueTags?.[issue.key] || [];
+        if (!filters.tag.some(t => issueTags.includes(t))) return false;
+      } else if (filters.tag && !Array.isArray(filters.tag)) {
         const issueTags = filters.issueTags?.[issue.key] || [];
         if (!issueTags.includes(filters.tag)) return false;
       }
@@ -644,14 +696,23 @@ export async function getRoadmapIssues(filters = {}) {
     if (issue.sprint_id) {
       if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
       if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
-      if (filters.fixVersion && issue.fix_version !== filters.fixVersion) return false;
-      if (filters.customer) {
-        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
-        if (!issueCustomers.includes(filters.customer)) return false;
+      if (filters.fixVersion && Array.isArray(filters.fixVersion) && filters.fixVersion.length > 0) {
+        if (!filters.fixVersion.includes(issue.fix_version)) return false;
       }
-      if (filters.product && issue.product !== filters.product) return false;
-      if (filters.assigneeId && issue.assignee_id !== filters.assigneeId) return false;
-      if (filters.tag) {
+      if (filters.customer && Array.isArray(filters.customer) && filters.customer.length > 0) {
+        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+        if (!filters.customer.some(c => issueCustomers.includes(c))) return false;
+      }
+      if (filters.product && Array.isArray(filters.product) && filters.product.length > 0) {
+        if (!filters.product.includes(issue.product)) return false;
+      }
+      if (filters.assigneeId && Array.isArray(filters.assigneeId) && filters.assigneeId.length > 0) {
+        if (!filters.assigneeId.includes(issue.assignee_id)) return false;
+      }
+      if (filters.tag && Array.isArray(filters.tag) && filters.tag.length > 0) {
+        const issueTags = filters.issueTags?.[issue.key] || [];
+        if (!filters.tag.some(t => issueTags.includes(t))) return false;
+      } else if (filters.tag && !Array.isArray(filters.tag)) {
         const issueTags = filters.issueTags?.[issue.key] || [];
         if (!issueTags.includes(filters.tag)) return false;
       }

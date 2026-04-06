@@ -189,6 +189,8 @@ export class AllIssuesView {
    * Render the view
    */
   render() {
+    const hasActiveFilters = Object.keys(this.filters || {}).length > 0;
+
     return `
       <div class="all-issues-view" id="all-issues-view">
         <div class="view-header">
@@ -199,6 +201,11 @@ export class AllIssuesView {
             <h2>All Issues</h2>
           </div>
           <div class="view-header-right">
+            ${hasActiveFilters ? `
+              <button class="clear-filters-btn" id="clear-filters-btn" title="Clear all filters">
+                Clear Filters
+              </button>
+            ` : ''}
             <div id="saved-views-menu-container"></div>
           </div>
         </div>
@@ -323,6 +330,19 @@ export class AllIssuesView {
         this.onBack();
       }
     });
+
+    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+    clearFiltersBtn?.addEventListener('click', () => {
+      this.handleClearFilters();
+    });
+  }
+
+  /**
+   * Handle clear all filters
+   */
+  handleClearFilters() {
+    this.filters = {};
+    this.loadIssues();
   }
 
   /**
@@ -387,6 +407,23 @@ export const AllIssuesViewStyles = `
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+
+  .clear-filters-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+  }
+
+  .clear-filters-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--accent);
   }
 
   .loading-container {

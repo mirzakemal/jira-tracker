@@ -52,6 +52,40 @@ export class FilterPanel {
   }
 
   /**
+   * Clear a single filter field
+   */
+  clearField(field) {
+    delete this.filters[field];
+    if (this.onFilterChange) {
+      this.onFilterChange({ ...this.filters });
+    }
+    // Trigger a refresh to update the UI
+    if (document.getElementById('filter-panel')) {
+      this.refresh();
+    }
+  }
+
+  /**
+   * Remove a single value from a multi-select filter
+   */
+  removeValue(field, value) {
+    if (Array.isArray(this.filters[field])) {
+      this.filters[field] = this.filters[field].filter(v => v !== value);
+      // Clean up if array is empty
+      if (this.filters[field].length === 0) {
+        delete this.filters[field];
+      }
+    }
+    if (this.onFilterChange) {
+      this.onFilterChange({ ...this.filters });
+    }
+    // Trigger a refresh to update the UI
+    if (document.getElementById('filter-panel')) {
+      this.refresh();
+    }
+  }
+
+  /**
    * Render the filter panel
    */
   render(issueCount = null) {
@@ -81,10 +115,40 @@ export class FilterPanel {
     `;
   }
 
+  /**
+   * Render clear button for a filter field
+   */
+  renderClearButton(fieldKey) {
+    return `<button class="clear-field-btn" data-field="${fieldKey}" title="Clear ${fieldKey} filter">×</button>`;
+  }
+
+  /**
+   * Render selected values as chips with remove buttons
+   */
+  renderSelectedChips(fieldKey, values, displayNames = null) {
+    if (!Array.isArray(values) || values.length === 0) return '';
+
+    const names = displayNames || values;
+    return `
+      <div class="selected-chips" data-field="${fieldKey}">
+        ${values.map((value, index) => `
+          <span class="chip">
+            ${this.escapeHtml(names[index] || value)}
+            <button class="chip-remove" data-field="${fieldKey}" data-value="${this.escapeHtml(value)}" title="Remove">×</button>
+          </span>
+        `).join('')}
+      </div>
+    `;
+  }
+
   renderSearchFilter() {
+    const hasValue = this.filters.searchQuery;
     return `
       <div class="filter-group full-width">
-        <label for="search-filter">Search</label>
+        <label for="search-filter">
+          Search
+          ${hasValue ? this.renderClearButton('searchQuery') : ''}
+        </label>
         <input
           type="text"
           id="search-filter"
@@ -99,10 +163,14 @@ export class FilterPanel {
   renderProjectFilter() {
     const projects = this.availableFilters.projects || [];
     const selected = this.filters.projectKey || '';
+    const hasValue = selected && selected !== '';
 
     return `
       <div class="filter-group">
-        <label for="project-filter">Project</label>
+        <label for="project-filter">
+          Project
+          ${hasValue ? this.renderClearButton('projectKey') : ''}
+        </label>
         <select id="project-filter" class="filter-select">
           <option value="">All Projects</option>
           ${projects.map(p => `
@@ -118,10 +186,15 @@ export class FilterPanel {
   renderStatusFilter() {
     const statuses = this.availableFilters.status || [];
     const selectedStatuses = this.filters.status || [];
+    const hasValue = Array.isArray(selectedStatuses) && selectedStatuses.length > 0;
 
     return `
       <div class="filter-group">
-        <label for="status-filter">Status</label>
+        <label for="status-filter">
+          Status
+          ${hasValue ? this.renderClearButton('status') : ''}
+        </label>
+        ${hasValue ? this.renderSelectedChips('status', selectedStatuses) : ''}
         <select id="status-filter" class="filter-select" multiple>
           ${statuses.map(s => `
             <option value="${this.escapeHtml(s)}" ${selectedStatuses.includes(s) ? 'selected' : ''}>
@@ -136,76 +209,96 @@ export class FilterPanel {
 
   renderFixVersionFilter() {
     const versions = this.availableFilters.fixVersion || [];
-    const selected = this.filters.fixVersion || '';
+    const selected = this.filters.fixVersion || [];
+    const hasValue = Array.isArray(selected) && selected.length > 0;
 
     return `
       <div class="filter-group">
-        <label for="fixversion-filter">Fix Version</label>
-        <select id="fixversion-filter" class="filter-select">
-          <option value="">All Versions</option>
+        <label for="fixversion-filter">
+          Fix Version
+          ${hasValue ? this.renderClearButton('fixVersion') : ''}
+        </label>
+        ${hasValue ? this.renderSelectedChips('fixVersion', selected) : ''}
+        <select id="fixversion-filter" class="filter-select" multiple>
           ${versions.map(v => `
-            <option value="${this.escapeHtml(v)}" ${selected === v ? 'selected' : ''}>
+            <option value="${this.escapeHtml(v)}" ${Array.isArray(selected) && selected.includes(v) ? 'selected' : ''}>
               ${this.escapeHtml(v)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
     `;
   }
 
   renderIssueTypeFilter() {
     const issueTypes = this.availableFilters.issueType || [];
-    const selected = this.filters.issueType || '';
+    const selected = this.filters.issueType || [];
+    const hasValue = Array.isArray(selected) && selected.length > 0;
 
     return `
       <div class="filter-group">
-        <label for="issue-type-filter">Card Type</label>
-        <select id="issue-type-filter" class="filter-select">
-          <option value="">All Types</option>
+        <label for="issue-type-filter">
+          Card Type
+          ${hasValue ? this.renderClearButton('issueType') : ''}
+        </label>
+        ${hasValue ? this.renderSelectedChips('issueType', selected) : ''}
+        <select id="issue-type-filter" class="filter-select" multiple>
           ${issueTypes.map(t => `
-            <option value="${this.escapeHtml(t)}" ${selected === t ? 'selected' : ''}>
+            <option value="${this.escapeHtml(t)}" ${Array.isArray(selected) && selected.includes(t) ? 'selected' : ''}>
               ${this.escapeHtml(t)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
     `;
   }
 
   renderCustomerFilter() {
     const customers = this.availableFilters.customer || [];
-    const selected = this.filters.customer || '';
+    const selected = this.filters.customer || [];
+    const hasValue = Array.isArray(selected) && selected.length > 0;
 
     return `
       <div class="filter-group">
-        <label for="customer-filter">Customer</label>
-        <select id="customer-filter" class="filter-select">
-          <option value="">All Customers</option>
+        <label for="customer-filter">
+          Customer
+          ${hasValue ? this.renderClearButton('customer') : ''}
+        </label>
+        ${hasValue ? this.renderSelectedChips('customer', selected) : ''}
+        <select id="customer-filter" class="filter-select" multiple>
           ${customers.map(c => `
-            <option value="${this.escapeHtml(c)}" ${selected === c ? 'selected' : ''}>
+            <option value="${this.escapeHtml(c)}" ${Array.isArray(selected) && selected.includes(c) ? 'selected' : ''}>
               ${this.escapeHtml(c)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
     `;
   }
 
   renderProductFilter() {
     const products = this.availableFilters.product || [];
-    const selected = this.filters.product || '';
+    const selected = this.filters.product || [];
+    const hasValue = Array.isArray(selected) && selected.length > 0;
 
     return `
       <div class="filter-group">
-        <label for="product-filter">Product</label>
-        <select id="product-filter" class="filter-select">
-          <option value="">All Products</option>
+        <label for="product-filter">
+          Product
+          ${hasValue ? this.renderClearButton('product') : ''}
+        </label>
+        ${hasValue ? this.renderSelectedChips('product', selected) : ''}
+        <select id="product-filter" class="filter-select" multiple>
           ${products.map(p => `
-            <option value="${this.escapeHtml(p)}" ${selected === p ? 'selected' : ''}>
+            <option value="${this.escapeHtml(p)}" ${Array.isArray(selected) && selected.includes(p) ? 'selected' : ''}>
               ${this.escapeHtml(p)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
     `;
   }
@@ -217,73 +310,115 @@ export class FilterPanel {
     const codeReviewers1 = this.availableFilters.codeReviewer1 || [];
     const codeReviewers2 = this.availableFilters.codeReviewer2 || [];
 
+    const selectedAssignees = this.filters.assigneeId || [];
+    const selectedReporters = this.filters.reporterId || [];
+    const selectedQaTesters = this.filters.qaTesterId || [];
+    const selectedCodeReviewers1 = this.filters.codeReviewer1Id || [];
+    const selectedCodeReviewers2 = this.filters.codeReviewer2Id || [];
+
+    // Build name maps for display
+    const assigneeMap = new Map(assignees.map(a => [a.account_id || a.accountId, a.display_name || a.displayName]));
+    const reporterMap = new Map(reporters.map(r => [r.account_id || r.accountId, r.display_name || r.displayName]));
+    const qaTesterMap = new Map(qaTesters.map(q => [q.account_id || q.accountId, q.display_name || q.displayName]));
+    const codeReviewer1Map = new Map(codeReviewers1.map(r => [r.account_id || r.accountId, r.display_name || r.displayName]));
+    const codeReviewer2Map = new Map(codeReviewers2.map(r => [r.account_id || r.accountId, r.display_name || r.displayName]));
+
+    // Get display names for selected values
+    const getDisplayNames = (ids, map) => ids.map(id => map.get(id) || id);
+
     return `
       <div class="filter-group">
-        <label for="assignee-filter">Assignee</label>
-        <select id="assignee-filter" class="filter-select">
-          <option value="">All Assignees</option>
+        <label for="assignee-filter">
+          Assignee
+          ${Array.isArray(selectedAssignees) && selectedAssignees.length > 0 ? this.renderClearButton('assigneeId') : ''}
+        </label>
+        ${Array.isArray(selectedAssignees) && selectedAssignees.length > 0 ? this.renderSelectedChips('assigneeId', selectedAssignees, getDisplayNames(selectedAssignees, assigneeMap)) : ''}
+        <select id="assignee-filter" class="filter-select" multiple>
           ${assignees.map(a => `
-            <option value="${this.escapeHtml(a.account_id || a.accountId)}" ${this.filters.assigneeId === (a.account_id || a.accountId) ? 'selected' : ''}>
+            <option value="${this.escapeHtml(a.account_id || a.accountId)}" ${Array.isArray(selectedAssignees) && selectedAssignees.includes(a.account_id || a.accountId) ? 'selected' : ''}>
               ${this.escapeHtml(a.display_name || a.displayName)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
 
       <div class="filter-group">
-        <label for="reporter-filter">Reporter</label>
-        <select id="reporter-filter" class="filter-select">
-          <option value="">All Reporters</option>
+        <label for="reporter-filter">
+          Reporter
+          ${Array.isArray(selectedReporters) && selectedReporters.length > 0 ? this.renderClearButton('reporterId') : ''}
+        </label>
+        ${Array.isArray(selectedReporters) && selectedReporters.length > 0 ? this.renderSelectedChips('reporterId', selectedReporters, getDisplayNames(selectedReporters, reporterMap)) : ''}
+        <select id="reporter-filter" class="filter-select" multiple>
           ${reporters.map(r => `
-            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${this.filters.reporterId === (r.account_id || r.accountId) ? 'selected' : ''}>
+            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${Array.isArray(selectedReporters) && selectedReporters.includes(r.account_id || r.accountId) ? 'selected' : ''}>
               ${this.escapeHtml(r.display_name || r.displayName)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
 
       <div class="filter-group">
-        <label for="qa-tester-filter">QA Tester</label>
-        <select id="qa-tester-filter" class="filter-select">
-          <option value="">All QA Testers</option>
+        <label for="qa-tester-filter">
+          QA Tester
+          ${Array.isArray(selectedQaTesters) && selectedQaTesters.length > 0 ? this.renderClearButton('qaTesterId') : ''}
+        </label>
+        ${Array.isArray(selectedQaTesters) && selectedQaTesters.length > 0 ? this.renderSelectedChips('qaTesterId', selectedQaTesters, getDisplayNames(selectedQaTesters, qaTesterMap)) : ''}
+        <select id="qa-tester-filter" class="filter-select" multiple>
           ${qaTesters.map(q => `
-            <option value="${this.escapeHtml(q.account_id || q.accountId)}" ${this.filters.qaTesterId === (q.account_id || q.accountId) ? 'selected' : ''}>
+            <option value="${this.escapeHtml(q.account_id || q.accountId)}" ${Array.isArray(selectedQaTesters) && selectedQaTesters.includes(q.account_id || q.accountId) ? 'selected' : ''}>
               ${this.escapeHtml(q.display_name || q.displayName)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
 
       <div class="filter-group">
-        <label for="code-reviewer-1-filter">Code Reviewer #1</label>
-        <select id="code-reviewer-1-filter" class="filter-select">
-          <option value="">All Reviewers</option>
+        <label for="code-reviewer-1-filter">
+          Code Reviewer #1
+          ${Array.isArray(selectedCodeReviewers1) && selectedCodeReviewers1.length > 0 ? this.renderClearButton('codeReviewer1Id') : ''}
+        </label>
+        ${Array.isArray(selectedCodeReviewers1) && selectedCodeReviewers1.length > 0 ? this.renderSelectedChips('codeReviewer1Id', selectedCodeReviewers1, getDisplayNames(selectedCodeReviewers1, codeReviewer1Map)) : ''}
+        <select id="code-reviewer-1-filter" class="filter-select" multiple>
           ${codeReviewers1.map(r => `
-            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${this.filters.codeReviewer1Id === (r.account_id || r.accountId) ? 'selected' : ''}>
+            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${Array.isArray(selectedCodeReviewers1) && selectedCodeReviewers1.includes(r.account_id || r.accountId) ? 'selected' : ''}>
               ${this.escapeHtml(r.display_name || r.displayName)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
 
       <div class="filter-group">
-        <label for="code-reviewer-2-filter">Code Reviewer #2</label>
-        <select id="code-reviewer-2-filter" class="filter-select">
-          <option value="">All Reviewers</option>
+        <label for="code-reviewer-2-filter">
+          Code Reviewer #2
+          ${Array.isArray(selectedCodeReviewers2) && selectedCodeReviewers2.length > 0 ? this.renderClearButton('codeReviewer2Id') : ''}
+        </label>
+        ${Array.isArray(selectedCodeReviewers2) && selectedCodeReviewers2.length > 0 ? this.renderSelectedChips('codeReviewer2Id', selectedCodeReviewers2, getDisplayNames(selectedCodeReviewers2, codeReviewer2Map)) : ''}
+        <select id="code-reviewer-2-filter" class="filter-select" multiple>
           ${codeReviewers2.map(r => `
-            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${this.filters.codeReviewer2Id === (r.account_id || r.accountId) ? 'selected' : ''}>
+            <option value="${this.escapeHtml(r.account_id || r.accountId)}" ${Array.isArray(selectedCodeReviewers2) && selectedCodeReviewers2.includes(r.account_id || r.accountId) ? 'selected' : ''}>
               ${this.escapeHtml(r.display_name || r.displayName)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
     `;
   }
 
   renderDateFilter() {
+    const hasUpdatedAfter = this.filters.updatedAfter;
+    const hasToBeTested = this.filters.toBeTestedByDate;
+
     return `
       <div class="filter-group">
-        <label for="date-filter">Updated After</label>
+        <label for="date-filter">
+          Updated After
+          ${hasUpdatedAfter ? this.renderClearButton('updatedAfter') : ''}
+        </label>
         <input
           type="date"
           id="date-filter"
@@ -292,7 +427,10 @@ export class FilterPanel {
         />
       </div>
       <div class="filter-group">
-        <label for="to-be-tested-filter">To Be Tested By</label>
+        <label for="to-be-tested-filter">
+          To Be Tested By
+          ${hasToBeTested ? this.renderClearButton('toBeTestedByDate') : ''}
+        </label>
         <input
           type="date"
           id="to-be-tested-filter"
@@ -306,29 +444,47 @@ export class FilterPanel {
 
   renderTagsFilter() {
     const tags = this.availableFilters.tags || [];
-    const selected = this.filters.tag || '';
+    const selected = this.filters.tag || [];
+    const hasValue = Array.isArray(selected) && selected.length > 0;
 
     return `
       <div class="filter-group">
-        <label for="tag-filter">Tags</label>
-        <select id="tag-filter" class="filter-select">
-          <option value="">All Tags</option>
+        <label for="tag-filter">
+          Tags
+          ${hasValue ? this.renderClearButton('tag') : ''}
+        </label>
+        ${hasValue ? this.renderSelectedChips('tag', selected) : ''}
+        <select id="tag-filter" class="filter-select" multiple>
           ${tags.map(t => `
-            <option value="${this.escapeHtml(t)}" ${selected === t ? 'selected' : ''}>
+            <option value="${this.escapeHtml(t)}" ${Array.isArray(selected) && selected.includes(t) ? 'selected' : ''}>
               ${this.escapeHtml(t)}
             </option>
           `).join('')}
         </select>
+        <small>Hold Ctrl/Cmd to select multiple</small>
       </div>
     `;
   }
 
   /**
    * Refresh the component in the DOM
+   * Preserves multi-select selections by reading from this.filters
    */
   refresh() {
     const container = document.getElementById('filter-panel');
     if (container) {
+      // Sync DOM multi-select state with this.filters before re-render
+      const multiSelectFields = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag'];
+      multiSelectFields.forEach(field => {
+        const value = this.filters[field];
+        if (Array.isArray(value) && value.length > 0) {
+          // Ensure filters are up to date
+          this.filters[field] = [...value];
+        } else if (!value) {
+          delete this.filters[field];
+        }
+      });
+
       container.outerHTML = this.render();
       this.bindEvents();
     }
@@ -352,9 +508,30 @@ export class FilterPanel {
       this.emitChange();
     });
 
-    // Clear filters button
-    const clearBtn = document.getElementById('clear-filters-btn');
-    clearBtn?.addEventListener('click', () => this.clearAll());
+    // Clear all filters button
+    const clearAllBtn = document.getElementById('clear-filters-btn');
+    clearAllBtn?.addEventListener('click', () => this.clearAll());
+
+    // Per-field clear buttons
+    document.querySelectorAll('.clear-field-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const field = btn.getAttribute('data-field');
+        this.clearField(field);
+      });
+    });
+
+    // Chip remove buttons (remove single value from multi-select)
+    document.querySelectorAll('.chip-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const field = btn.getAttribute('data-field');
+        const value = btn.getAttribute('data-value');
+        this.removeValue(field, value);
+      });
+    });
 
     // Status filter (multi-select)
     const statusSelect = document.getElementById('status-filter');
@@ -362,68 +539,78 @@ export class FilterPanel {
       const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
       this.filters.status = selected.length > 0 ? selected : null;
       this.emitChange();
+      // Don't update chips here - let parent component handle re-render after load
     });
 
-    // Fix version filter
+    // Fix version filter (multi-select)
     const fixVersionSelect = document.getElementById('fixversion-filter');
     fixVersionSelect?.addEventListener('change', (e) => {
-      this.filters.fixVersion = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.fixVersion = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
-    // Issue Type (Card Type) filter
+    // Issue Type (Card Type) filter (multi-select)
     const issueTypeSelect = document.getElementById('issue-type-filter');
     issueTypeSelect?.addEventListener('change', (e) => {
-      this.filters.issueType = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.issueType = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
-    // Customer filter
+    // Customer filter (multi-select)
     const customerSelect = document.getElementById('customer-filter');
     customerSelect?.addEventListener('change', (e) => {
-      this.filters.customer = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.customer = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
-    // Product filter
+    // Product filter (multi-select)
     const productSelect = document.getElementById('product-filter');
     productSelect?.addEventListener('change', (e) => {
-      this.filters.product = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.product = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
     // Assignee filter
     const assigneeSelect = document.getElementById('assignee-filter');
     assigneeSelect?.addEventListener('change', (e) => {
-      this.filters.assigneeId = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.assigneeId = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
     // Reporter filter
     const reporterSelect = document.getElementById('reporter-filter');
     reporterSelect?.addEventListener('change', (e) => {
-      this.filters.reporterId = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.reporterId = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
     // QA Tester filter
     const qaTesterSelect = document.getElementById('qa-tester-filter');
     qaTesterSelect?.addEventListener('change', (e) => {
-      this.filters.qaTesterId = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.qaTesterId = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
     // Code Reviewer #1 filter
     const codeReviewer1Select = document.getElementById('code-reviewer-1-filter');
     codeReviewer1Select?.addEventListener('change', (e) => {
-      this.filters.codeReviewer1Id = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.codeReviewer1Id = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
     // Code Reviewer #2 filter
     const codeReviewer2Select = document.getElementById('code-reviewer-2-filter');
     codeReviewer2Select?.addEventListener('change', (e) => {
-      this.filters.codeReviewer2Id = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.codeReviewer2Id = selected.length > 0 ? selected : null;
       this.emitChange();
     });
 
@@ -441,10 +628,11 @@ export class FilterPanel {
       this.emitChange();
     });
 
-    // Tag filter
+    // Tag filter (multi-select)
     const tagSelect = document.getElementById('tag-filter');
     tagSelect?.addEventListener('change', (e) => {
-      this.filters.tag = e.target.value || null;
+      const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+      this.filters.tag = selected.length > 0 ? selected : null;
       this.emitChange();
     });
   }
@@ -452,20 +640,15 @@ export class FilterPanel {
   /**
    * Emit filter change event
    * Does NOT trigger a re-render - parent component handles that
+   * Does NOT update URL - parent component handles that via renderTableView()
    */
   emitChange() {
     if (this.onFilterChange) {
       this.onFilterChange({ ...this.filters });
     }
-
-    // Update URL with filters if in All Issues view
-    if (window.updateQueryParams && window.filtersToParams) {
-      const params = window.filtersToParams(this.filters);
-      params.allIssues = 'true';
-      window.updateQueryParams(params, false);
-    }
-    // Note: We don't call refresh() here - the parent component handles re-rendering
-    // This prevents the input from losing focus during typing
+    // Note: We don't update URL here - the parent component's renderTableView()
+    // calls updateUrlFilters() after the debounced load completes
+    // This prevents double URL updates and hashchange-triggered re-renders
   }
 
   /**
@@ -542,6 +725,67 @@ export const FilterPanelStyles = `
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .clear-field-btn {
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: all 0.2s ease;
+  }
+
+  .clear-field-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .selected-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--hover);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    transition: all 0.2s ease;
+  }
+
+  .chip-remove:hover {
+    background: var(--text-secondary);
+    color: var(--background);
   }
 
   .filter-input,

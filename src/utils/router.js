@@ -74,6 +74,8 @@ export function getQueryParams() {
  */
 export function onRouteChange(callback) {
   window.addEventListener('hashchange', () => {
+    // Skip if this is an internal URL update from filter change
+    if (isInternalUpdate) return;
     const { route, params } = parseRoute();
     callback({ route, params });
   });
@@ -87,7 +89,10 @@ export function onRouteChange(callback) {
 /**
  * Update query parameters without changing route
  */
+let isInternalUpdate = false;
+
 export function updateQueryParams(params, merge = true) {
+  isInternalUpdate = true;
   const { route, params: currentParams } = parseRoute();
 
   const newParams = merge
@@ -95,6 +100,8 @@ export function updateQueryParams(params, merge = true) {
     : params;
 
   navigate(route, newParams);
+  // Reset flag after next tick
+  setTimeout(() => { isInternalUpdate = false; }, 100);
 }
 
 /**
@@ -113,17 +120,23 @@ export function filtersToParams(filters) {
   const params = {};
 
   // Simple value filters
-  const simpleFilters = ['projectKey', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
+  const simpleFilters = ['projectKey', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
   simpleFilters.forEach(key => {
     if (filters[key]) {
       params[key] = filters[key];
     }
   });
 
-  // Array filters (status)
-  if (filters.status && Array.isArray(filters.status) && filters.status.length > 0) {
-    params.status = filters.status;
-  }
+  // Array filters - can be multiple values
+  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag'];
+  arrayFilters.forEach(key => {
+    if (filters[key] && Array.isArray(filters[key]) && filters[key].length > 0) {
+      params[key] = filters[key];
+    } else if (filters[key] && !Array.isArray(filters[key])) {
+      // Handle legacy single-value format
+      params[key] = filters[key];
+    }
+  });
 
   return params;
 }
@@ -135,17 +148,20 @@ export function paramsToFilters(params) {
   const filters = {};
 
   // Simple value filters
-  const simpleFilters = ['projectKey', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
+  const simpleFilters = ['projectKey', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
   simpleFilters.forEach(key => {
     if (params[key]) {
       filters[key] = params[key];
     }
   });
 
-  // Array filters (status) - can be multiple values
-  if (params.status) {
-    filters.status = Array.isArray(params.status) ? params.status : [params.status];
-  }
+  // Array filters - can be multiple values
+  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag'];
+  arrayFilters.forEach(key => {
+    if (params[key]) {
+      filters[key] = Array.isArray(params[key]) ? params[key] : [params[key]];
+    }
+  });
 
   return filters;
 }
