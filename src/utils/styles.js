@@ -58,11 +58,17 @@ export const backButtonStyles = `
 `
 
 export const loadingContainerStyles = `
-  .loading-container {
+  .loading-container,
+  .loading {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 40px;
+    color: var(--text);
+  }
+
+  .loading-container {
     padding: 60px 20px;
     gap: 16px;
   }
@@ -78,18 +84,24 @@ export const loadingContainerStyles = `
     justify-content: center;
     padding: 60px 20px;
     gap: 16px;
+    color: var(--text);
   }
 `
 
 export const emptyStateStyles = `
   .empty-state,
-  .empty-board,
   .table-view-empty,
   .roadmap-empty,
   .saved-views-empty {
     text-align: center;
     padding: 60px 20px;
     color: var(--text-secondary);
+  }
+
+  .empty-board {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text);
   }
 
   .empty-state .empty-hint,
@@ -303,6 +315,11 @@ export const formInputStyles = `
   .form-group small a {
     color: var(--accent);
   }
+
+  .select-group select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `
 
 export const formRowStyles = `
@@ -313,6 +330,20 @@ export const formRowStyles = `
 
   .form-row .form-group {
     flex: 1;
+  }
+`
+
+export const formContainerStyles = `
+  .settings-form,
+  .create-issue-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .create-issue-form textarea {
+    resize: vertical;
+    min-height: 100px;
   }
 `
 
@@ -487,15 +518,19 @@ export const panelBaseStyles = `
   .settings-panel,
   .board-selector {
     background: var(--code-bg);
-    padding: 20px;
     margin-bottom: 20px;
     box-shadow: none;
   }
 
   .settings-panel {
+    padding: 20px;
     max-width: 500px;
     margin-left: auto;
     margin-right: auto;
+  }
+
+  .board-selector {
+    padding: 15px 20px;
   }
 
   .filter-panel {
@@ -693,6 +728,7 @@ export const sharedStyles = `
   ${formGroupStyles}
   ${formInputStyles}
   ${formRowStyles}
+  ${formContainerStyles}
   ${formActionsStyles}
   ${borderButtonStyles}
   ${btnSmStyles}
