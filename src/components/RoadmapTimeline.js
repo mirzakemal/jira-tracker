@@ -589,13 +589,6 @@ export class RoadmapTimeline {
  * Roadmap Timeline Styles
  */
 export const RoadmapTimelineStyles = `
-  .roadmap-timeline {
-    background: var(--surface);
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-    overflow: hidden;
-  }
-
   .timeline-container {
     display: flex;
     flex-direction: column;
@@ -800,26 +793,6 @@ export const RoadmapTimelineStyles = `
     border-radius: 3px;
   }
 
-  .issue-bar.status-done {
-    background: #22c55e;
-    color: white;
-  }
-
-  .issue-bar.status-inprogress {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .issue-bar.status-todo {
-    background: #f59e0b;
-    color: white;
-  }
-
-  .issue-bar.status-default {
-    background: #6b7280;
-    color: white;
-  }
-
   .issue-bar.extends-beyond {
     opacity: 0.85;
   }
@@ -867,22 +840,6 @@ export const RoadmapTimelineStyles = `
     z-index: 3;
   }
 
-  .issue-milestone.status-done {
-    border-top-color: #22c55e;
-  }
-
-  .issue-milestone.status-inprogress {
-    border-top-color: #3b82f6;
-  }
-
-  .issue-milestone.status-todo {
-    border-top-color: #f59e0b;
-  }
-
-  .issue-milestone.status-default {
-    border-top-color: #6b7280;
-  }
-
   .milestone-label {
     position: absolute;
     top: 14px;
@@ -894,15 +851,4 @@ export const RoadmapTimelineStyles = `
     font-weight: 500;
   }
 
-  .roadmap-empty {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-secondary);
-  }
-
-  .roadmap-empty .empty-hint {
-    font-size: 13px;
-    margin-top: 8px;
-    opacity: 0.8;
-  }
 `;

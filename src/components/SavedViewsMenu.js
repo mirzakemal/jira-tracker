@@ -234,24 +234,6 @@ export const SavedViewsMenuStyles = `
     position: relative;
   }
 
-  .saved-views-dropdown {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-  }
-
-  .saved-views-dropdown:hover {
-    background: var(--hover);
-  }
-
   .dropdown-arrow {
     font-size: 10px;
     transition: transform 0.2s ease;
@@ -326,71 +308,8 @@ export const SavedViewsMenuStyles = `
     color: #c62828;
   }
 
-  .saved-views-empty {
-    padding: 20px;
-    text-align: center;
-    color: var(--text-secondary);
-    font-size: 14px;
-  }
-
   .saved-views-footer {
     padding: 12px 16px;
     border-top: 1px solid var(--border);
-  }
-
-  .btn-sm {
-    padding: 6px 12px;
-    font-size: 13px;
-  }
-
-  .save-view-dialog {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-  }
-
-  .save-view-dialog[style*="display: flex"] {
-    display: flex;
-  }
-
-  .save-view-dialog-content {
-    background: var(--surface);
-    padding: 24px;
-    border-radius: 12px;
-    box-shadow: var(--shadow-lg);
-    min-width: 400px;
-  }
-
-  .save-view-dialog-content h4 {
-    margin: 0 0 16px 0;
-    color: var(--text);
-  }
-
-  .view-name-input {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 14px;
-    margin-bottom: 16px;
-    box-sizing: border-box;
-  }
-
-  .view-name-input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-
-  .save-view-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
   }
 `;

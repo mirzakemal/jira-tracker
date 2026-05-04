@@ -666,14 +666,6 @@ export class FilterPanel {
  * Filter Panel Styles
  */
 export const FilterPanelStyles = `
-  .filter-panel {
-    background: var(--surface);
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: var(--shadow);
-    margin-bottom: 16px;
-  }
-
   .filter-header {
     display: flex;
     justify-content: space-between;
@@ -687,65 +679,10 @@ export const FilterPanelStyles = `
     color: var(--text);
   }
 
-  .clear-filters-btn {
-    padding: 6px 12px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s ease;
-  }
-
-  .clear-filters-btn:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
   .filter-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
-  }
-
-  .filter-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .filter-group.full-width {
-    grid-column: 1 / -1;
-  }
-
-  .filter-group label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .clear-field-btn {
-    padding: 2px 6px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text-secondary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    transition: all 0.2s ease;
-  }
-
-  .clear-field-btn:hover {
-    background: var(--hover);
-    color: var(--text);
-    border-color: var(--accent);
   }
 
   .selected-chips {
@@ -753,56 +690,6 @@ export const FilterPanelStyles = `
     flex-wrap: wrap;
     gap: 6px;
     padding: 6px 0;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: var(--hover);
-    border-radius: 4px;
-    font-size: 12px;
-    color: var(--text);
-  }
-
-  .chip-remove {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    width: 16px;
-    height: 16px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    border-radius: 50%;
-    font-size: 14px;
-    line-height: 1;
-    transition: all 0.2s ease;
-  }
-
-  .chip-remove:hover {
-    background: var(--text-secondary);
-    color: var(--background);
-  }
-
-  .filter-input,
-  .filter-select {
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 14px;
-    background: var(--background);
-    color: var(--text);
-    transition: border-color 0.2s ease;
-  }
-
-  .filter-input:focus,
-  .filter-select:focus {
-    outline: none;
-    border-color: var(--accent);
   }
 
   .filter-select[multiple] {

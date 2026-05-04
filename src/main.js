@@ -9,6 +9,7 @@ import { FilterPanelStyles } from './components/FilterPanel.js'
 import { TableViewStyles } from './components/TableView.js'
 import { SavedViewsMenuStyles } from './components/SavedViewsMenu.js'
 import { TagsManagerStyles } from './components/TagsManager.js'
+import { sharedStyles } from './utils/styles.js'
 import { saveSelection, loadSelection, loadCredentials } from './utils/storage.js'
 import { initDatabase } from './db/indexeddb.js'
 import { syncAll, syncIncremental, getSyncStatus } from './db/sync.js'
@@ -511,6 +512,7 @@ function addGlobalStyles() {
   const style = document.createElement('style')
   style.id = styleId
   style.textContent = `
+    ${sharedStyles}
     ${SyncStatusStyles}
     ${FilterPanelStyles}
     ${TableViewStyles}

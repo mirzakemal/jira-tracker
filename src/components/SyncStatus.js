@@ -100,16 +100,6 @@ export class SyncStatus {
  * Sync Status Styles
  */
 export const SyncStatusStyles = `
-  .sync-status {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
-    background: var(--surface);
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-  }
-
   .sync-button {
     display: flex;
     align-items: center;

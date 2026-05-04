@@ -366,49 +366,6 @@ export const AllIssuesViewStyles = `
     margin: 0 auto;
   }
 
-  .view-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-
-  .view-header-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .view-header-left h2 {
-    margin: 0;
-    color: var(--text);
-    font-size: 24px;
-  }
-
-  .back-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    background: var(--background);
-    color: var(--text);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-  }
-
-  .back-btn:hover {
-    background: var(--hover);
-  }
-
-  .view-header-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
   .clear-filters-btn {
     padding: 8px 16px;
     border: 1px solid var(--border);
@@ -424,18 +381,5 @@ export const AllIssuesViewStyles = `
     background: var(--hover);
     color: var(--text);
     border-color: var(--accent);
-  }
-
-  .loading-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    gap: 16px;
-  }
-
-  .loading-container p {
-    color: var(--text-secondary);
   }
 `;

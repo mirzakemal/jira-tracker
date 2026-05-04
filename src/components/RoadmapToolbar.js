@@ -225,70 +225,10 @@ export class RoadmapToolbar {
  * Roadmap Toolbar Styles
  */
 export const RoadmapToolbarStyles = `
-  .roadmap-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    padding: 16px;
-    background: var(--surface);
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-    margin-bottom: 16px;
-    align-items: flex-end;
-  }
-
   .toolbar-section {
     display: flex;
     gap: 12px;
     align-items: flex-end;
-  }
-
-  .toolbar-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .toolbar-group label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .toolbar-input,
-  .toolbar-select {
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 14px;
-    background: var(--background);
-    color: var(--text);
-    min-width: 140px;
-  }
-
-  .toolbar-input:focus,
-  .toolbar-select:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-
-  .toolbar-btn {
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    background: var(--background);
-    color: var(--text);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s ease;
-    height: 36px;
-  }
-
-  .toolbar-btn:hover {
-    background: var(--hover);
-    border-color: var(--accent);
   }
 
   @media (max-width: 768px) {

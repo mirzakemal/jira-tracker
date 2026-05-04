@@ -256,58 +256,10 @@ export const TagsManagerStyles = `
     font-style: italic;
   }
 
-  .tag-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    background: var(--accent-bg);
-    color: var(--accent);
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 500;
-  }
-
-  .tag-remove {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border: none;
-    background: transparent;
-    color: var(--accent);
-    cursor: pointer;
-    border-radius: 50%;
-    font-size: 14px;
-    line-height: 1;
-    transition: all 0.2s ease;
-  }
-
-  .tag-remove:hover {
-    background: var(--accent);
-    color: white;
-  }
-
   .tag-add-row {
     display: flex;
     gap: 4px;
     align-items: center;
-  }
-
-  .tag-input {
-    flex: 1;
-    padding: 4px 8px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 12px;
-    background: var(--background);
-    color: var(--text);
-  }
-
-  .tag-input:focus {
-    outline: none;
-    border-color: var(--accent);
   }
 
   .tag-add-btn {
@@ -331,17 +283,4 @@ export const TagsManagerStyles = `
     transform: scale(1.1);
   }
 
-  .tags-filter {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .tags-filter label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
 `;

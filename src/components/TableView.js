@@ -691,21 +691,6 @@ export const TableViewStyles = `
     color: var(--text);
   }
 
-  .customize-columns-btn {
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    background: var(--background);
-    color: var(--text);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-  }
-
-  .customize-columns-btn:hover {
-    background: var(--hover);
-  }
-
   .table-container {
     overflow-x: auto;
     max-height: 70vh;
@@ -780,16 +765,6 @@ export const TableViewStyles = `
     text-align: center;
   }
 
-  .issue-link {
-    color: var(--accent);
-    text-decoration: none;
-    font-size: 13px;
-  }
-
-  .issue-link:hover {
-    text-decoration: underline;
-  }
-
   .issue-key {
     font-weight: 600;
     color: var(--accent);
@@ -806,14 +781,6 @@ export const TableViewStyles = `
     cursor: help;
   }
 
-  .status-badge {
-    display: inline-block;
-    padding: 4px 8px;
-    background: var(--hover);
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
-  }
 
   .priority-badge {
     display: inline-block;
@@ -875,139 +842,6 @@ export const TableViewStyles = `
     font-style: italic;
   }
 
-  .tags-editor-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-  }
-
-  .tags-editor-content {
-    background: var(--surface);
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 500px;
-    width: 90%;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .tags-editor-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-
-  .tags-editor-header h4 {
-    margin: 0;
-    color: var(--text);
-    font-size: 18px;
-  }
-
-  .modal-close {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .modal-close:hover {
-    color: var(--text);
-  }
-
-  .tags-editor-body {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .tags-editor-summary {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  .tags-editor-existing {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    min-height: 32px;
-  }
-
-  .tags-editor-existing .tag-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    background: var(--accent-bg);
-    color: var(--accent);
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  .tags-editor-existing .tag-remove {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border: none;
-    background: transparent;
-    color: var(--accent);
-    cursor: pointer;
-    border-radius: 50%;
-    font-size: 14px;
-    line-height: 1;
-    transition: all 0.2s ease;
-  }
-
-  .tags-editor-existing .tag-remove:hover {
-    background: var(--accent);
-    color: white;
-  }
-
-  .tags-editor-add {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .tags-editor-add .tag-input {
-    flex: 1;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 14px;
-    background: var(--background);
-    color: var(--text);
-  }
-
-  .tags-editor-add .tag-input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-
-  .tags-editor-footer {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-  }
-
   .date-value {
     color: var(--text-secondary);
     font-size: 13px;
@@ -1016,35 +850,6 @@ export const TableViewStyles = `
   .empty-value {
     color: var(--text-secondary);
     opacity: 0.5;
-  }
-
-  .column-customizer {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .column-customizer-content {
-    background: var(--surface);
-    padding: 24px;
-    border-radius: 12px;
-    box-shadow: var(--shadow-lg);
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-
-  .column-customizer h4 {
-    margin: 0 0 16px 0;
-    color: var(--text);
   }
 
   .customizer-note {
@@ -1085,23 +890,5 @@ export const TableViewStyles = `
     color: var(--text-secondary);
     font-style: italic;
     margin-left: auto;
-  }
-
-  .column-customizer-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .table-view-empty {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-secondary);
-  }
-
-  .table-view-empty .empty-hint {
-    font-size: 14px;
-    margin-top: 8px;
-    opacity: 0.8;
   }
 `;
