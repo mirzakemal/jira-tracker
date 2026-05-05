@@ -14,6 +14,8 @@ import {
   getMetadata
 } from './indexeddb.js';
 
+import { CUSTOM_FIELDS, FIELD_PATTERNS } from '../jira-config.js';
+
 const STORES = {
   PROJECTS: 'projects',
   BOARDS: 'boards',
@@ -341,7 +343,7 @@ async function upsertIssues(issues, boardId, sprintId) {
       if (key.startsWith('customfield_')) {
         const fieldName = key.toLowerCase();
         // Check for specific custom field ID for customer (can be array, string, or object)
-        if (key === 'customfield_10043') {
+        if (key === CUSTOM_FIELDS.customer) {
           if (Array.isArray(value)) {
             // Handle array of strings or array of objects
             const customerValues = value.map(v => {
@@ -361,21 +363,21 @@ async function upsertIssues(issues, boardId, sprintId) {
           } else if (value?.name) {
             customer = value.name;
           }
-          console.log(`[Sync] Issue ${issue.key}: customfield_10043 =`, value, '-> customer =', customer);
+          console.log(`[Sync] Issue ${issue.key}: ${CUSTOM_FIELDS.customer} =`, value, '-> customer =', customer);
         }
-        if (fieldName.includes('product') && typeof value === 'string') {
+        if (FIELD_PATTERNS.product.some(p => fieldName.includes(p)) && typeof value === 'string') {
           product = value;
         }
-        if (fieldName.includes('qa') || fieldName.includes('tester')) {
+        if (FIELD_PATTERNS.qaTester.some(p => fieldName.includes(p))) {
           qaTesterId = value?.accountId || null;
         }
         // Code reviewer fields
-        if (fieldName === 'customfield_10044') {
+        if (key === CUSTOM_FIELDS.codeReviewer1) {
           // Code Reviewer #1
           issue.code_reviewer_1_id = value?.accountId || null;
           issue.code_reviewer_1_name = value?.displayName || null;
         }
-        if (fieldName === 'customfield_10313') {
+        if (key === CUSTOM_FIELDS.codeReviewer2) {
           // Code Reviewer #2
           issue.code_reviewer_2_id = value?.accountId || null;
           issue.code_reviewer_2_name = value?.displayName || null;

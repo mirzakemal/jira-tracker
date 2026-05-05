@@ -5,14 +5,23 @@
  */
 export function debounce(func, wait = 300) {
   let timeout;
-  return function executedFunction(...args) {
+  let cancelled = false;
+  function executedFunction(...args) {
+    cancelled = false;
     const later = () => {
       clearTimeout(timeout);
-      func(...args);
+      if (!cancelled) {
+        func(...args);
+      }
     };
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
+  }
+  executedFunction.cancel = () => {
+    cancelled = true;
+    clearTimeout(timeout);
   };
+  return executedFunction;
 }
 
 /**

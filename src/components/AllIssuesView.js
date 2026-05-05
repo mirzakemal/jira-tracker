@@ -52,6 +52,16 @@ export class AllIssuesView {
   }
 
   /**
+   * Clean up the view instance: cancel pending debounced calls and mark as destroyed
+   */
+  destroy() {
+    this._destroyed = true;
+    if (this.debouncedLoadIssues && this.debouncedLoadIssues.cancel) {
+      this.debouncedLoadIssues.cancel();
+    }
+  }
+
+  /**
    * Load issues from database
    */
   async loadIssues(filters = null, options = {}) {
@@ -91,6 +101,7 @@ export class AllIssuesView {
       window.currentAllIssuesView = this;
     } catch (error) {
       console.error('[AllIssuesView] Failed to load issues:', error);
+      if (this._destroyed) return;
       this.isLoading = false;
       this.refresh();
     }

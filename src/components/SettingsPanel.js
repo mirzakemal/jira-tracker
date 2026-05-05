@@ -12,10 +12,15 @@ export class SettingsPanel {
     this.client = null;
     this.isConnected = !!savedUser;
     this.user = savedUser;
+    this.savedCredentials = null;
+  }
+
+  async loadSavedCredentials() {
+    this.savedCredentials = await loadCredentials();
   }
 
   render() {
-    const saved = loadCredentials() || {};
+    const saved = this.savedCredentials || {};
 
     return `
       <div class="settings-panel">
@@ -110,7 +115,7 @@ export class SettingsPanel {
     const email = document.getElementById('jira-email').value.trim();
     const tokenInput = document.getElementById('jira-token');
     const token = tokenInput.value.includes('•')
-      ? loadCredentials().token
+      ? this.savedCredentials?.token || ''
       : tokenInput.value.trim();
 
     if (!domain || !email || !token) {
@@ -128,7 +133,7 @@ export class SettingsPanel {
       this.user = await this.client.testConnection();
       this.isConnected = true;
 
-      saveCredentials({ domain, email, token });
+      await saveCredentials({ domain, email, token });
 
       this.onConnect({ client: this.client, user: this.user });
     } catch (error) {

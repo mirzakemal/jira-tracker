@@ -30,7 +30,8 @@ const state = {
   isSyncing: false,
   currentView: 'board', // 'board' or 'all-issues'
   jiraDomain: null,
-  filters: {} // Store current filters
+  filters: {}, // Store current filters
+  currentViewInstance: null // Track active view instance for cleanup
 }
 
 // DOM Elements
@@ -49,7 +50,7 @@ async function init() {
   window.paramsToFilters = paramsToFilters
 
   // Try to auto-connect if credentials exist
-  const saved = loadCredentials()
+  const saved = await loadCredentials()
   if (saved?.domain && saved?.email && saved?.token) {
     await autoConnect(saved)
   } else {
@@ -90,19 +91,22 @@ function handleRouteChange({ route, params }) {
         boardSelectorContainer.style.display = 'none'
       }
 
-      const roadmapView = new RoadmapView(state.client, state.jiraDomain, switchToBoardView)
+      // Clean up previous view
+      cleanupCurrentView()
+
+      state.currentViewInstance = new RoadmapView(state.client, state.jiraDomain, switchToBoardView)
       const container = document.getElementById('issue-board-container')
       if (container) {
-        container.innerHTML = roadmapView.render()
-        roadmapView.loadRoadmap(filters)
+        container.innerHTML = state.currentViewInstance.render()
+        state.currentViewInstance.loadRoadmap(filters)
       }
     } else {
       // Already in roadmap view, apply filters if they changed
-      if (window.currentRoadmapView && filters) {
-        const filtersChanged = JSON.stringify(window.currentRoadmapView.filters) !== JSON.stringify(filters)
+      if (state.currentViewInstance && filters) {
+        const filtersChanged = JSON.stringify(state.currentViewInstance.filters) !== JSON.stringify(filters)
         if (filtersChanged) {
-          window.currentRoadmapView.filters = filters
-          window.currentRoadmapView.loadRoadmap()
+          state.currentViewInstance.filters = filters
+          state.currentViewInstance.loadRoadmap()
         }
       }
     }
@@ -118,21 +122,24 @@ function handleRouteChange({ route, params }) {
         boardSelectorContainer.style.display = 'none'
       }
 
-      const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
+      // Clean up previous view
+      cleanupCurrentView()
+
+      state.currentViewInstance = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
       const container = document.getElementById('issue-board-container')
       if (container) {
-        container.innerHTML = allIssuesView.render()
-        allIssuesView.loadIssues(filters)
+        container.innerHTML = state.currentViewInstance.render()
+        state.currentViewInstance.loadIssues(filters)
       }
     } else {
       // Already in all-issues view, apply filters if they changed
       const container = document.getElementById('all-issues-view')
-      if (container && window.currentAllIssuesView) {
-        const filtersChanged = JSON.stringify(window.currentAllIssuesView.filters) !== JSON.stringify(filters)
+      if (container && state.currentViewInstance) {
+        const filtersChanged = JSON.stringify(state.currentViewInstance.filters) !== JSON.stringify(filters)
         if (filtersChanged) {
           // Use the debounced loadIssues for smooth filtering
-          window.currentAllIssuesView.filters = filters
-          window.currentAllIssuesView.loadIssues()
+          state.currentViewInstance.filters = filters
+          state.currentViewInstance.loadIssues()
         }
       }
     }
@@ -142,6 +149,9 @@ function handleRouteChange({ route, params }) {
       state.currentView = 'board'
       updateViewToggle()
 
+      // Clean up previous view
+      cleanupCurrentView()
+
       // Show board selector
       const boardSelectorContainer = document.getElementById('board-selector-container')
       if (boardSelectorContainer) {
@@ -150,6 +160,18 @@ function handleRouteChange({ route, params }) {
 
       loadIssues()
     }
+  }
+}
+
+/**
+ * Clean up the current view instance when switching views
+ */
+function cleanupCurrentView() {
+  if (state.currentViewInstance) {
+    if (typeof state.currentViewInstance.destroy === 'function') {
+      state.currentViewInstance.destroy()
+    }
+    state.currentViewInstance = null
   }
 }
 
@@ -198,8 +220,9 @@ async function autoConnect(saved) {
 /**
  * Render disconnected state (settings panel)
  */
-function renderDisconnected(savedUser = null) {
+async function renderDisconnected(savedUser = null) {
   const settingsPanel = new SettingsPanel(handleConnect, savedUser)
+  await settingsPanel.loadSavedCredentials()
 
   appElement.innerHTML = `
     <div class="app-container">
