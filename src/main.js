@@ -1,4 +1,5 @@
 import './style.css'
+import logger from './utils/logger.js';
 import { SettingsPanel } from './components/SettingsPanel.js'
 import { BoardSelector } from './components/BoardSelector.js'
 import { IssueBoard } from './components/IssueBoard.js'
@@ -34,6 +35,11 @@ const state = {
   currentViewInstance: null // Track active view instance for cleanup
 }
 
+// Runtime logger config from URL params (?log=debug)
+const urlParams = new URLSearchParams(window.location.search)
+const logLevel = urlParams.get('log')
+if (logLevel) logger.setLevel(logLevel)
+
 // DOM Elements
 let appElement
 
@@ -68,19 +74,17 @@ async function init() {
 function handleRouteChange({ route, params }) {
   // Skip if client not ready yet
   if (!state.client) {
-    console.log('[Route] Skipping - client not ready')
+    logger.info('[Route] Skipping - client not ready')
     return
   }
 
-  // Convert URL params to filters
   const filters = paramsToFilters(params)
   state.filters = filters
 
-  console.log('[Route] Handling route:', route, 'params:', params, 'currentView:', state.currentView)
+  logger.info('[Route] Handling route:', route, 'params:', params, 'currentView:', state.currentView)
 
-  // Handle route - check for roadmap first, then all-issues, then board
   if (route === ROUTES.ROADMAP || params.roadmap === 'true') {
-    console.log('[Route] Switching to Roadmap view')
+    logger.info('[Route] Switching to Roadmap view')
     if (state.currentView !== 'roadmap') {
       state.currentView = 'roadmap'
       updateViewToggle()
@@ -111,7 +115,7 @@ function handleRouteChange({ route, params }) {
       }
     }
   } else if (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey) {
-    console.log('[Route] Switching to All Issues view')
+    logger.info('[Route] Switching to All Issues view')
     if (state.currentView !== 'all-issues') {
       state.currentView = 'all-issues'
       updateViewToggle()
@@ -144,7 +148,7 @@ function handleRouteChange({ route, params }) {
       }
     }
   } else if (route === ROUTES.BOARD || route === '' || route === '/') {
-    console.log('[Route] Switching to Board view')
+    logger.info('[Route] Switching to Board view')
     if (state.currentView !== 'board') {
       state.currentView = 'board'
       updateViewToggle()
@@ -192,6 +196,7 @@ async function autoConnect(saved) {
     state.client = client
     state.user = user
     state.jiraDomain = saved.domain
+    window.jiraDomain = saved.domain
     state.dbInitialized = false
 
     // Check current route BEFORE rendering to determine initial view
@@ -202,12 +207,11 @@ async function autoConnect(saved) {
       : 'board'
     const filters = paramsToFilters(params)
 
-    console.log('[AutoConnect] Initial view will be:', initialView, 'route:', route, 'params:', params)
+    logger.info('[AutoConnect] Initial view will be:', initialView, 'route:', route, 'params:', params)
 
-    // Render with the correct initial view and filters
     await renderConnected(user, initialView, filters)
   } catch (error) {
-    console.log('[AutoConnect] Failed to auto-connect:', error.message)
+    logger.error('[AutoConnect] Failed to auto-connect:', error.message)
     // Fall back to login screen with saved credentials pre-filled
     renderDisconnected({
       displayName: 'User',
@@ -394,6 +398,7 @@ function handleConnect({ client, user }) {
   state.client = client
   state.user = user
   state.jiraDomain = client?.domain || null
+  window.jiraDomain = state.jiraDomain
   renderConnected(user)
 }
 
@@ -457,11 +462,11 @@ async function handleSelectionChange(selection) {
  */
 async function loadIssues() {
   if (!state.board) {
-    console.log('[loadIssues] No board selected')
+    logger.info('[loadIssues] No board selected')
     return
   }
 
-  console.log('[loadIssues] Loading issues for board:', state.board, 'sprint:', state.sprint)
+  logger.info('[loadIssues] Loading issues for board:', state.board, 'sprint:', state.sprint)
 
   // Cancel any previous in-flight request
   if (state.issuesAbortController) {
@@ -471,7 +476,7 @@ async function loadIssues() {
 
   const container = document.getElementById('issue-board-container')
   if (!container) {
-    console.log('[loadIssues] Container not found')
+    logger.info('[loadIssues] Container not found')
     return
   }
 
@@ -481,13 +486,12 @@ async function loadIssues() {
     const issueBoard = new IssueBoard(state.client, () => loadIssues())
     await issueBoard.loadIssues(state.board, state.sprint, { signal: state.issuesAbortController.signal })
 
-    // Skip update if request was aborted or container changed
     if (state.issuesAbortController.signal.aborted) {
-      console.log('[loadIssues] Request was aborted')
+      logger.info('[loadIssues] Request was aborted')
       return
     }
 
-    console.log('[loadIssues] Issues loaded successfully, columns:', issueBoard.columns.size)
+    logger.info('[loadIssues] Issues loaded successfully, columns:', issueBoard.columns.size)
 
     const currentContainer = document.getElementById('issue-board-container')
     if (currentContainer && currentContainer === container) {
@@ -499,7 +503,7 @@ async function loadIssues() {
       state.currentIssues = window.currentIssues
     }
   } catch (error) {
-    console.error('[loadIssues] Failed to load issues:', error)
+    logger.error('[loadIssues] Failed to load issues:', error)
     // Ignore abort errors (expected when canceling requests)
     if (error.name === 'AbortError') {
       return
@@ -644,32 +648,26 @@ async function renderSyncStatus() {
     syncStatus.setStatus(status)
   } catch (e) {
     // Database not initialized yet
-    console.log('[Sync] Initial status not available')
+    logger.info('[Sync] Initial status not available')
   }
 }
 
-/**
- * Auto-sync data in background on page load
- */
 async function autoSync() {
   if (!state.client || state.isSyncing) return
 
   try {
-    // Initialize database if needed
     if (!state.dbInitialized) {
       await initDatabase()
       state.dbInitialized = true
     }
 
-    // Perform incremental sync to refresh data
     await syncIncremental(state.client)
-
     const status = await getSyncStatus()
     updateSyncStatusUI(false, status)
 
-    console.log('[AutoSync] Background sync completed')
+    logger.info('[AutoSync] Background sync completed')
   } catch (error) {
-    console.log('[AutoSync] Background sync failed:', error.message)
+    logger.error('[AutoSync] Background sync failed:', error.message)
   }
 }
 
@@ -689,7 +687,7 @@ async function handleSyncRequest() {
         await initDatabase()
         state.dbInitialized = true
       } catch (dbError) {
-        console.error('[DB] Initialization failed:', dbError)
+        logger.error('[DB] Initialization failed:', dbError)
         throw new Error(`Database initialization failed: ${dbError.message}. Please try again or clear browser data.`)
       }
     }
@@ -698,7 +696,7 @@ async function handleSyncRequest() {
     if (state.client) {
       await syncAll(state.client)
       invalidateFilterCache() // Invalidate cache after sync
-      const status = getSyncStatus()
+      const status = await getSyncStatus()
       updateSyncStatusUI(false, status)
 
       // Reload issues if on all-issues view
@@ -707,7 +705,7 @@ async function handleSyncRequest() {
       }
     }
   } catch (error) {
-    console.error('[Sync] Failed:', error)
+    logger.error('[Sync] Failed:', error)
     alert(`Sync failed: ${error.message}`)
     updateSyncStatusUI(false)
   }
@@ -788,7 +786,7 @@ async function switchToAllIssuesView(filters = {}) {
       await initDatabase()
       state.dbInitialized = true
     } catch (error) {
-      console.error('[DB] Failed to initialize:', error)
+      logger.error('[DB] Failed to initialize:', error)
       alert(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return
@@ -830,7 +828,7 @@ async function switchToRoadmapView(filters = {}) {
       await initDatabase()
       state.dbInitialized = true
     } catch (error) {
-      console.error('[DB] Failed to initialize:', error)
+      logger.error('[DB] Failed to initialize:', error)
       alert(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return

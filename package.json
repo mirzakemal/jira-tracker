@@ -7,10 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "eslint src/",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "eslint": "^10.3.0",
+    "fake-indexeddb": "^6.2.5",
+    "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "vite": "^8.0.1",
     "vitest": "^4.1.5"

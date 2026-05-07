@@ -3,6 +3,8 @@
  * Allows selecting project, board, and sprint
  */
 
+import logger from '../utils/logger.js';
+
 export class BoardSelector {
   constructor(onSelectionChange) {
     this.onSelectionChange = onSelectionChange;
@@ -25,7 +27,7 @@ export class BoardSelector {
 
       await this.loadBoards(client);
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      logger.error('[BoardSelector] Failed to load projects:', error);
     }
   }
 
@@ -45,7 +47,7 @@ export class BoardSelector {
 
       await this.loadSprints(client);
     } catch (error) {
-      console.error('Failed to load boards:', error);
+      logger.error('[BoardSelector] Failed to load boards:', error);
       this.boards = [];
     }
   }
@@ -79,7 +81,7 @@ export class BoardSelector {
       }
     } catch (error) {
       // Board doesn't support sprints (e.g., Kanban board without sprints)
-      console.log(`[BoardSelector] Board ${id} does not support sprints, using "All Sprints" view`);
+      logger.info('[BoardSelector] Board', id, 'does not support sprints, using "All Sprints" view');
       this.sprints = [];
     }
 

@@ -832,59 +832,6 @@ export async function getRoadmapData(filters = {}) {
   const issues = await getRoadmapIssues(filters);
   const sprints = await getSprintsInDateRange(filters.startDate, filters.endDate);
 
-  // DEBUG: Log issue data structure and field availability
-  console.log('[RoadmapData] Total issues loaded:', issues.length);
-
-  // Count issues with various fields
-  const withParentKey = issues.filter(i => i.parent_key).length;
-  const withStartDate = issues.filter(i => i.start_date).length;
-  const withDueDate = issues.filter(i => i.due_date).length;
-  const withResolvedAt = issues.filter(i => i.resolved_at).length;
-  const withCreatedAt = issues.filter(i => i.created_at).length;
-  const withSprintId = issues.filter(i => i.sprint_id).length;
-
-  // Count by issue type
-  const issueTypes = {};
-  issues.forEach(issue => {
-    const type = issue.issue_type || 'Unknown';
-    issueTypes[type] = (issueTypes[type] || 0) + 1;
-  });
-
-  // Count by fix_version
-  const fixVersions = {};
-  issues.forEach(issue => {
-    const version = issue.fix_version || 'No Version';
-    fixVersions[version] = (fixVersions[version] || 0) + 1;
-  });
-
-  // Sample issue data (first 3 issues)
-  const sampleIssues = issues.slice(0, 3).map(i => ({
-    key: i.key,
-    issue_type: i.issue_type,
-    parent_key: i.parent_key,
-    start_date: i.start_date,
-    due_date: i.due_date,
-    resolved_at: i.resolved_at,
-    created_at: i.created_at,
-    updated_at: i.updated_at,
-    sprint_id: i.sprint_id,
-    fix_version: i.fix_version,
-    status: i.status,
-    assignee_id: i.assignee_id
-  }));
-
-  console.log('[RoadmapData] Field availability:', {
-    withParentKey,
-    withStartDate,
-    withDueDate,
-    withResolvedAt,
-    withCreatedAt,
-    withSprintId
-  });
-  console.log('[RoadmapData] Issue types:', issueTypes);
-  console.log('[RoadmapData] Fix versions:', fixVersions);
-  console.log('[RoadmapData] Sample issues:', sampleIssues);
-
   // Determine grouping strategy based on filters and data availability
   const groupBy = filters.groupBy || 'epic';
   let groups = [];
@@ -984,21 +931,12 @@ export async function getRoadmapData(filters = {}) {
         assigneeMap.set(id, name);
       });
 
-      console.log('[RoadmapData] Assignee grouping - sample issues:', issues.slice(0, 5).map(i => ({
-        key: i.key,
-        assignee_id: i.assignee_id,
-        assignee_name: i.assignee_name
-      })));
-      console.log('[RoadmapData] Assignee map:', Object.fromEntries(assigneeMap));
-
       const uniqueAssigneeIds = [...new Set(issues.map(i => i.assignee_id || 'unassigned'))];
       groups = uniqueAssigneeIds.map(id => ({
         key: `assignee-${id}`,
         name: assigneeMap.get(id),
         is_assignee: true
       }));
-
-      console.log('[RoadmapData] Groups created:', groups);
 
       uniqueAssigneeIds.forEach(assigneeId => {
         const key = `assignee-${assigneeId}`;
@@ -1042,12 +980,6 @@ export async function getRoadmapData(filters = {}) {
 
   // Filter out empty groups
   const groupedData = Object.values(issuesByGroup).filter(group => group.issues.length > 0);
-
-  console.log('[RoadmapData] Grouping by:', groupBy);
-  console.log('[RoadmapData] Number of groups:', groupedData.length);
-  groupedData.forEach(g => {
-    console.log(`[RoadmapData] Group "${g.epic.name}": ${g.issues.length} issues`);
-  });
 
   return {
     epics: groups,

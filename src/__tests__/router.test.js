@@ -40,7 +40,7 @@ describe('parseRoute', () => {
   it('parses route with array parameters', () => {
     window.location.hash = '#board?status=Done&status=In+Progress';
     const result = parseRoute();
-    expect(result.params.status).toBe('In Progress');
+    expect(result.params.status).toEqual(['Done', 'In Progress']);
   });
 });
 

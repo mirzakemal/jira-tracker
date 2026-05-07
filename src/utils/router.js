@@ -19,13 +19,20 @@ export function parseRoute() {
 
   const route = path || ROUTES.BOARD;
 
-  // Parse query parameters
+  // Parse query parameters — handle multi-value (array) params
   const params = {};
   if (queryString) {
     const searchParams = new URLSearchParams(queryString);
-    searchParams.forEach((value, key) => {
-      params[key] = value;
-    });
+    for (const [key, value] of searchParams.entries()) {
+      if (params.hasOwnProperty(key)) {
+        if (!Array.isArray(params[key])) {
+          params[key] = [params[key]];
+        }
+        params[key].push(value);
+      } else {
+        params[key] = value;
+      }
+    }
   }
 
   return { route, params };
@@ -72,27 +79,33 @@ export function getQueryParams() {
 /**
  * Listen for route changes
  */
+const routeListeners = new Map();
+
 export function onRouteChange(callback) {
-  window.addEventListener('hashchange', () => {
-    // Skip if this is an internal URL update from filter change
-    if (isInternalUpdate) return;
+  const id = Symbol('route-listener');
+  const handler = () => {
+    if (internalUpdateCount > 0) return;
     const { route, params } = parseRoute();
     callback({ route, params });
-  });
+  };
+
+  window.addEventListener('hashchange', handler);
+  routeListeners.set(id, handler);
 
   // Return cleanup function
   return () => {
-    window.removeEventListener('hashchange', callback);
+    window.removeEventListener('hashchange', handler);
+    routeListeners.delete(id);
   };
 }
 
 /**
  * Update query parameters without changing route
  */
-let isInternalUpdate = false;
+let internalUpdateCount = 0;
 
 export function updateQueryParams(params, merge = true) {
-  isInternalUpdate = true;
+  internalUpdateCount++;
   const { route, params: currentParams } = parseRoute();
 
   const newParams = merge
@@ -100,8 +113,8 @@ export function updateQueryParams(params, merge = true) {
     : params;
 
   navigate(route, newParams);
-  // Reset flag after next tick
-  setTimeout(() => { isInternalUpdate = false; }, 100);
+  // Decrement after next tick to allow hashchange to fire and skip the handler
+  setTimeout(() => { internalUpdateCount--; }, 0);
 }
 
 /**

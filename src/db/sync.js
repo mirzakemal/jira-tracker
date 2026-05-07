@@ -3,6 +3,7 @@
  * Fetches and caches Jira data locally using IndexedDB
  */
 
+import logger from '../utils/logger.js';
 import {
   initDatabase,
   put,
@@ -30,7 +31,7 @@ const STORES = {
  * Sync all data from Jira
  */
 export async function syncAll(client) {
-  console.log('[Sync] Starting full sync...');
+  logger.info('[Sync] Starting full sync...');
 
   try {
     await initDatabase();
@@ -42,10 +43,10 @@ export async function syncAll(client) {
     await setMetadata('last_full_sync', new Date().toISOString());
     await setMetadata('last_sync', new Date().toISOString());
 
-    console.log('[Sync] Full sync completed');
+    logger.info('[Sync] Full sync completed');
     return { success: true, timestamp: new Date() };
   } catch (error) {
-    console.error('[Sync] Full sync failed:', error);
+    logger.error('[Sync] Full sync failed:', error);
     throw error;
   }
 }
@@ -54,7 +55,7 @@ export async function syncAll(client) {
  * Incremental sync
  */
 export async function syncIncremental(client) {
-  console.log('[Sync] Starting incremental sync...');
+  logger.info('[Sync] Starting incremental sync...');
 
   try {
     await initDatabase();
@@ -67,10 +68,10 @@ export async function syncIncremental(client) {
 
     await setMetadata('last_sync', new Date().toISOString());
 
-    console.log('[Sync] Incremental sync completed');
+    logger.info('[Sync] Incremental sync completed');
     return { success: true, timestamp: new Date() };
   } catch (error) {
-    console.error('[Sync] Incremental sync failed:', error);
+    logger.error('[Sync] Incremental sync failed:', error);
     throw error;
   }
 }
@@ -92,7 +93,7 @@ async function syncProjects(client) {
   }));
 
   await putBulk(STORES.PROJECTS, projectsToUpdate);
-  console.log(`[Sync] Synced ${projects.length} projects`);
+  logger.info(`[Sync] Synced ${projects.length} projects`);
 }
 
 /**
@@ -110,7 +111,7 @@ async function syncAllBoards(client) {
   }));
 
   await putBulk(STORES.BOARDS, boardsToUpdate);
-  console.log(`[Sync] Synced ${allBoards.length} boards`);
+  logger.info(`[Sync] Synced ${allBoards.length} boards`);
 }
 
 /**
@@ -134,29 +135,24 @@ async function syncSprintsForBoard(client, boardId) {
     const active = await client.getSprints(boardId, 'active');
     allSprints.push(...active);
   } catch (e) {
-    console.log(`[Sync] No active sprints for board ${boardId}`);
+    logger.debug(`[Sync] No active sprints for board ${boardId}`);
   }
 
   try {
     const future = await client.getSprints(boardId, 'future');
     allSprints.push(...future);
   } catch (e) {
-    console.log(`[Sync] No future sprints for board ${boardId}`);
+    logger.debug(`[Sync] No future sprints for board ${boardId}`);
   }
 
   try {
     const completed = await client.getSprints(boardId, 'closed');
     allSprints.push(...completed);
   } catch (e) {
-    console.log(`[Sync] No completed sprints for board ${boardId}`);
+    logger.debug(`[Sync] No completed sprints for board ${boardId}`);
   }
 
   const sprintsToUpdate = allSprints.map(sprint => {
-    // Debug: log sprint date fields to verify format
-    console.log('[Sync] Sprint:', sprint.name, '| id:', sprint.id);
-    console.log('[Sync]   startDate:', sprint.startDate, '| endDate:', sprint.endDate);
-    console.log('[Sync]   start_date:', sprint.start_date, '| end_date:', sprint.end_date);
-
     return ({
       id: sprint.id,
       board_id: boardId,
@@ -169,7 +165,7 @@ async function syncSprintsForBoard(client, boardId) {
   });
 
   await putBulk(STORES.SPRINTS, sprintsToUpdate);
-  console.log(`[Sync] Synced ${allSprints.length} sprints for board ${boardId}`);
+  logger.info(`[Sync] Synced ${allSprints.length} sprints for board ${boardId}`);
 
   // If board has sprints, sync issues for each sprint
   if (allSprints.length > 0) {
@@ -205,9 +201,9 @@ async function syncBoardIssues(client, boardId) {
       startAt += maxResults;
     }
 
-    console.log(`[Sync] Synced ${totalIssues} issues for board ${boardId} (no sprints)`);
+    logger.info(`[Sync] Synced ${totalIssues} issues for board ${boardId} (no sprints)`);
   } catch (error) {
-    console.error(`[Sync] Failed to sync issues for board ${boardId} (no sprints):`, error);
+    logger.error(`[Sync] Failed to sync issues for board ${boardId} (no sprints):`, error);
   }
 }
 
@@ -235,9 +231,9 @@ async function syncSprintIssues(client, boardId, sprintId) {
       startAt += maxResults;
     }
 
-    console.log(`[Sync] Synced ${totalIssues} issues for sprint ${sprintId}`);
+    logger.info(`[Sync] Synced ${totalIssues} issues for sprint ${sprintId}`);
   } catch (error) {
-    console.error(`[Sync] Failed to sync issues for sprint ${sprintId}:`, error);
+    logger.error(`[Sync] Failed to sync issues for sprint ${sprintId}:`, error);
   }
 }
 
@@ -280,9 +276,9 @@ async function syncUpdatedIssues(client, sinceTimestamp) {
         startAt += maxResults;
       }
 
-      console.log(`[Sync] Synced ${totalIssues} updated issues for board ${board.id}`);
+      logger.info(`[Sync] Synced ${totalIssues} updated issues for board ${board.id}`);
     } catch (error) {
-      console.error(`[Sync] Failed to sync updated issues for board ${board.id}:`, error);
+      logger.error(`[Sync] Failed to sync updated issues for board ${board.id}:`, error);
     }
   }
 }
@@ -326,13 +322,12 @@ async function upsertIssues(issues, boardId, sprintId) {
 
       // Log if we found sprint dates - useful for debugging
       if (startDate || sprintEndDate) {
-        console.log(`[Sync] Issue ${issue.key}: Found sprint dates - start: ${startDate}, end: ${sprintEndDate}`);
+        logger.debug(`[Sync] Issue ${issue.key}: Found sprint dates - start: ${startDate}, end: ${sprintEndDate}`);
       }
     }
 
-    // Debug logging for parent_key
     if (parentKey) {
-      console.log(`[Sync] Issue ${issue.key}: Has parent_key = ${parentKey}`);
+      logger.debug(`[Sync] Issue ${issue.key}: Has parent_key = ${parentKey}`);
     }
 
     let customer = null;
@@ -342,7 +337,6 @@ async function upsertIssues(issues, boardId, sprintId) {
     for (const [key, value] of Object.entries(fields)) {
       if (key.startsWith('customfield_')) {
         const fieldName = key.toLowerCase();
-        // Check for specific custom field ID for customer (can be array, string, or object)
         if (key === CUSTOM_FIELDS.customer) {
           if (Array.isArray(value)) {
             // Handle array of strings or array of objects
@@ -363,7 +357,7 @@ async function upsertIssues(issues, boardId, sprintId) {
           } else if (value?.name) {
             customer = value.name;
           }
-          console.log(`[Sync] Issue ${issue.key}: ${CUSTOM_FIELDS.customer} =`, value, '-> customer =', customer);
+          logger.debug(`[Sync] Issue ${issue.key}: ${CUSTOM_FIELDS.customer} =`, value, '-> customer =', customer);
         }
         if (FIELD_PATTERNS.product.some(p => fieldName.includes(p)) && typeof value === 'string') {
           product = value;
@@ -403,7 +397,6 @@ async function upsertIssues(issues, boardId, sprintId) {
       code_reviewer_1_name: issue.code_reviewer_1_name || null,
       code_reviewer_2_id: issue.code_reviewer_2_id || null,
       code_reviewer_2_name: issue.code_reviewer_2_name || null,
-      reviewer_ids: fields.commenters?.map(c => c.accountId).join(',') || null,
       created_at: fields.created || null,
       updated_at: fields.updated || null,
       resolved_at: fields.resolutiondate || null,
@@ -441,7 +434,7 @@ export async function getSyncStatus() {
       issueCount: issues.length
     };
   } catch (error) {
-    console.warn('[Sync] Could not get sync status:', error.message);
+    logger.warn('[Sync] Could not get sync status:', error.message);
     return {
       lastFullSync: null,
       lastSync: null,

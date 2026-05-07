@@ -1,3 +1,5 @@
+import logger from './logger.js';
+
 /**
  * Local Storage Utilities
  * Handles saving/loading credentials with AES-GCM encryption via Web Crypto API
@@ -6,13 +8,12 @@
 const STORAGE_KEY = 'jira-planner-credentials';
 
 /**
- * Derive an AES-GCM encryption key from domain+email
- * Uses PBKDF2 with a fixed salt (not secret, just for key derivation uniqueness)
+ * Derive an AES-GCM encryption key from domain+email using a per-stored salt
+ * The salt is stored alongside the encrypted data (not secret, prevents key reuse)
  */
-async function deriveKey(domain, email) {
+async function deriveKey(domain, email, salt) {
   const encoder = new TextEncoder();
   const keyMaterial = encoder.encode(`${domain}:${email}`);
-  const salt = encoder.encode('jira-planner-v1-salt');
 
   const baseKey = await crypto.subtle.importKey(
     'raw',
@@ -41,7 +42,8 @@ async function deriveKey(domain, email) {
  */
 export async function saveCredentials({ domain, email, token }) {
   try {
-    const key = await deriveKey(domain, email);
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const key = await deriveKey(domain, email, salt);
     const encoder = new TextEncoder();
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encrypted = await crypto.subtle.encrypt(
@@ -53,6 +55,7 @@ export async function saveCredentials({ domain, email, token }) {
     const payload = {
       domain,
       email,
+      salt: Array.from(salt),
       iv: Array.from(iv),
       token: Array.from(new Uint8Array(encrypted))
     };
@@ -60,7 +63,7 @@ export async function saveCredentials({ domain, email, token }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     return true;
   } catch (error) {
-    console.error('Failed to save credentials:', error);
+    logger.error('Failed to save credentials:', error);
     if (error.name === 'QuotaExceededError') {
       alert('Storage full. Please clear browser data or use session mode.');
     } else if (error.name === 'SecurityError') {
@@ -70,9 +73,6 @@ export async function saveCredentials({ domain, email, token }) {
   }
 }
 
-/**
- * Load and decrypt credentials from localStorage
- */
 export async function loadCredentials() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -80,13 +80,14 @@ export async function loadCredentials() {
 
     const payload = JSON.parse(raw);
 
-    // Handle legacy plaintext format (migration)
     if (payload.token && typeof payload.token === 'string' && !payload.iv) {
-      return payload;
+      const result = { domain: payload.domain, email: payload.email, token: payload.token };
+      saveCredentials(result).catch(() => {});
+      return result;
     }
 
-    // Decrypt with Web Crypto
-    const key = await deriveKey(payload.domain, payload.email);
+    const salt = new Uint8Array(payload.salt);
+    const key = await deriveKey(payload.domain, payload.email, salt);
     const iv = new Uint8Array(payload.iv);
     const encryptedData = new Uint8Array(payload.token);
 
@@ -103,25 +104,19 @@ export async function loadCredentials() {
       token: decoder.decode(decrypted)
     };
   } catch (error) {
-    console.error('Failed to load credentials:', error);
+    logger.error('Failed to load credentials:', error);
     return null;
   }
 }
 
-/**
- * Clear stored credentials
- */
 export function clearCredentials() {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (error) {
-    console.error('Failed to clear credentials:', error);
+    logger.error('Failed to clear credentials:', error);
   }
 }
 
-/**
- * Save board/sprint selection
- */
 export function saveSelection({ boardId, sprintId }) {
   try {
     localStorage.setItem('jira-planner-selection', JSON.stringify({
@@ -129,19 +124,16 @@ export function saveSelection({ boardId, sprintId }) {
       sprintId
     }));
   } catch (error) {
-    console.error('Failed to save selection:', error);
+    logger.error('Failed to save selection:', error);
   }
 }
 
-/**
- * Load saved board/sprint selection
- */
 export function loadSelection() {
   try {
     const data = localStorage.getItem('jira-planner-selection');
     return data ? JSON.parse(data) : null;
   } catch (error) {
-    console.error('Failed to load selection:', error);
+    logger.error('Failed to load selection:', error);
     return null;
   }
 }

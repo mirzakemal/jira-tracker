@@ -3,6 +3,8 @@
  * Displays issues in a customizable table format
  */
 
+import logger from '../utils/logger.js';
+
 export class TableView {
   constructor(issues, onIssueClick, options = {}) {
     this.issues = issues || [];
@@ -411,7 +413,7 @@ export class TableView {
           newDirection = 'asc';
         }
 
-        console.log('[TableView] Sorting by', column, newDirection);
+        logger.debug('[TableView] Sorting by', column, newDirection);
         this.setSort(column, newDirection);
       });
     });
@@ -581,7 +583,7 @@ export class TableView {
 
         if (input) input.value = '';
       } catch (error) {
-        console.error('[TableView] Failed to add tag:', error);
+        logger.error('[TableView] Failed to add tag:', error);
       }
     });
 
@@ -613,7 +615,7 @@ export class TableView {
                 </span>
               `).join('');
         } catch (error) {
-          console.error('[TableView] Failed to remove tag:', error);
+          logger.error('[TableView] Failed to remove tag:', error);
         }
       });
     });

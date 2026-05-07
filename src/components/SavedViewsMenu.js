@@ -3,6 +3,7 @@
  * Allows saving, loading, and deleting custom views
  */
 
+import logger from '../utils/logger.js';
 import { getSavedViews, saveView, deleteView } from '../db/queries.js';
 
 export class SavedViewsMenu {
@@ -33,7 +34,7 @@ export class SavedViewsMenu {
       this.views = await getSavedViews();
       this.refresh();
     } catch (error) {
-      console.error('[SavedViewsMenu] Failed to load views:', error);
+      logger.error('[SavedViewsMenu] Failed to load views:', error);
     }
   }
 
@@ -168,13 +169,9 @@ export class SavedViewsMenu {
     const confirmSaveBtn = document.getElementById('confirm-save-view-btn');
     const viewNameInput = document.getElementById('view-name-input');
 
-    console.log('[SavedViewsMenu] Binding events, saveBtn exists:', !!saveNewBtn, 'dialog exists:', !!saveDialog);
-
     saveNewBtn?.addEventListener('click', () => {
-      console.log('[SavedViewsMenu] Save button clicked');
       if (saveDialog) {
         saveDialog.style.display = 'flex';
-        console.log('[SavedViewsMenu] Dialog displayed');
       }
       if (viewNameInput) {
         viewNameInput.focus();
@@ -188,7 +185,6 @@ export class SavedViewsMenu {
 
     confirmSaveBtn?.addEventListener('click', async () => {
       const name = viewNameInput?.value?.trim();
-      console.log('[SavedViewsMenu] Confirm save clicked, name:', name);
       if (!name) {
         viewNameInput.focus();
         return;
@@ -199,18 +195,14 @@ export class SavedViewsMenu {
 
       try {
         const viewData = this.onSave?.(name);
-        console.log('[SavedViewsMenu] View data from callback:', viewData);
         if (viewData) {
           await saveView(name, viewData.columns, viewData.filters);
-          console.log('[SavedViewsMenu] View saved successfully');
           this.loadViews();
           if (saveDialog) saveDialog.style.display = 'none';
           if (viewNameInput) viewNameInput.value = '';
-        } else {
-          console.log('[SavedViewsMenu] No view data returned from onSave callback');
         }
       } catch (error) {
-        console.error('[SavedViewsMenu] Failed to save view:', error);
+        logger.error('[SavedViewsMenu] Failed to save view:', error);
       } finally {
         this.isSaving = false;
         this.refresh();

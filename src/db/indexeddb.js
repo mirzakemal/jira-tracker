@@ -3,6 +3,8 @@
  * Lightweight alternative to SQLite for browser storage
  */
 
+import logger from '../utils/logger.js';
+
 const DB_NAME = 'jira-planner-db';
 const DB_VERSION = 4;
 const STORE_NAMES = {
@@ -34,13 +36,14 @@ export async function initDatabase() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
-      console.error('[IndexedDB] Failed to open:', request.error);
+      logger.error('[IndexedDB] Failed to open:', request.error);
+      dbPromise = null;
       reject(new Error(`Failed to open database: ${request.error?.message}`));
     };
 
     request.onsuccess = () => {
       dbInstance = request.result;
-      console.log('[IndexedDB] Database opened successfully');
+      logger.info('[IndexedDB] Database opened successfully');
       resolve(dbInstance);
     };
 
@@ -85,7 +88,7 @@ export async function initDatabase() {
         db.createObjectStore(STORE_NAMES.METADATA, { keyPath: 'key' });
       }
 
-      console.log('[IndexedDB] Database schema created/upgraded');
+      logger.info('[IndexedDB] Database schema created/upgraded');
     };
   });
 

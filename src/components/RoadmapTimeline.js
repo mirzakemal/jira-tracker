@@ -132,7 +132,6 @@ export class RoadmapTimeline {
         return sprintId === issueSprintId;
       });
       if (sprint && sprint.start_date) {
-        console.log(`[RoadmapTimeline] Using sprint start date for ${issue.key}: ${sprint.start_date}`);
         return new Date(sprint.start_date);
       }
     }
@@ -164,7 +163,6 @@ export class RoadmapTimeline {
         return sprintId === issueSprintId;
       });
       if (sprint && sprint.end_date) {
-        console.log(`[RoadmapTimeline] Using sprint end date for ${issue.key}: ${sprint.end_date}`);
         return new Date(sprint.end_date);
       }
     }
@@ -296,10 +294,6 @@ export class RoadmapTimeline {
 
     const { startDate, endDate } = this.getDateRange();
 
-    console.log('[RoadmapTimeline] === calculateIssuePositions START ===');
-    console.log('[RoadmapTimeline] Processing', issues.length, 'issues');
-    console.log('[RoadmapTimeline] Timeline range:', startDate.toISOString(), 'to', endDate.toISOString());
-
     // Sort issues by start date to ensure consistent ordering
     const sortedIssues = [...issues].sort((a, b) => {
       const aStart = this.getIssueStartDate(a).getTime();
@@ -307,7 +301,6 @@ export class RoadmapTimeline {
       return aStart - bStart;
     });
 
-    console.log('[RoadmapTimeline] Issues sorted by start date');
 
     sortedIssues.forEach((issue, issueIndex) => {
       const issueStart = this.getIssueStartDate(issue);
@@ -320,16 +313,9 @@ export class RoadmapTimeline {
       const clippedStart = Math.max(0, startPercent);
       const clippedEnd = Math.min(100, endPercent);
 
-      console.log('');
-      console.log(`[RoadmapTimeline] --- Issue #${issueIndex}: ${issue.key} ---`);
-      console.log(`  Raw dates: start=${issueStart.toISOString()}, end=${issueEnd.toISOString()}`);
-      console.log(`  startPercent=${startPercent.toFixed(2)}%, endPercent=${endPercent.toFixed(2)}%`);
-      console.log(`  clippedStart=${clippedStart.toFixed(2)}%, clippedEnd=${clippedEnd.toFixed(2)}%`);
-      console.log(`  rows BEFORE check: [${rows.length === 0 ? '(empty)' : rows.map(r => r.toFixed(2)).join(', ')}]`);
 
       // Issues outside visible range - still find a proper row to avoid overlap
       if (clippedEnd < 0 || clippedStart > 100) {
-        console.log(`  -> outside visible range, finding available row...`);
 
         // Find first available row for outside-range issues
         let rowNum = 0;
@@ -338,20 +324,17 @@ export class RoadmapTimeline {
           if (outsideRangeRows[i] === undefined || outsideRangeRows[i] === null) {
             rowNum = i;
             foundRow = true;
-            console.log(`  -> FITS in outside-range row ${rowNum} (previously unused)`);
             break;
           }
         }
 
         if (!foundRow) {
           rowNum = outsideRangeRows.length;
-          console.log(`  -> NO FIT found, creating NEW outside-range row ${rowNum}`);
         }
 
         // Mark row as used (use 100 as placeholder end value)
         outsideRangeRows[rowNum] = 100;
 
-        console.log(`  -> FINAL: assigned to outside-range row ${rowNum}, outsideRangeRows now: [${outsideRangeRows.map(r => r !== undefined ? r.toFixed(2) : 'empty').join(', ')}]`);
 
         issuesWithPositions.push({
           issue,
@@ -365,28 +348,22 @@ export class RoadmapTimeline {
       let rowNum = 0;
       let foundRow = false;
 
-      console.log(`  -> checking ${rows.length} existing rows for fit...`);
 
       for (let i = 0; i < rows.length; i++) {
-        console.log(`     row[${i}] ends at ${rows[i].toFixed(2)}%, issue starts at ${clippedStart.toFixed(2)}%`);
         // Issue can fit in this row if it starts at or after where the row's last issue ends
         if (clippedStart >= rows[i]) {
           rowNum = i;
           foundRow = true;
-          console.log(`  -> FITS in row ${rowNum} (${clippedStart.toFixed(2)}% >= ${rows[i].toFixed(2)}%)`);
           break;
         }
       }
 
       if (!foundRow) {
         rowNum = rows.length;
-        console.log(`  -> NO FIT found, creating NEW row ${rowNum}`);
       }
 
       // Update row end position (or create new row)
       rows[rowNum] = clippedEnd;
-      console.log(`  -> FINAL: assigned to row ${rowNum}, rows now: [${rows.map(r => r.toFixed(2)).join(', ')}]`);
-      console.log(`  -> DEBUG: row ${rowNum} updated with clippedEnd=${clippedEnd.toFixed(2)}% (issue ${issue.key})`);
 
       issuesWithPositions.push({
         issue,
@@ -395,15 +372,9 @@ export class RoadmapTimeline {
       });
     });
 
-    console.log('');
-    console.log('[RoadmapTimeline] === calculateIssuePositions END ===');
-    console.log('[RoadmapTimeline] Final rows:', rows.map(r => r.toFixed(2)));
-    console.log('[RoadmapTimeline] Max row:', Math.max(0, ...issuesWithPositions.map(i => i.row)));
 
     // Log issuesWithPositions detail
-    console.log('[RoadmapTimeline] issuesWithPositions:');
     issuesWithPositions.forEach((item, idx) => {
-      console.log(`  [${idx}] ${item.issue.key}: row=${item.row}, outsideRange=${item.outsideRange}`);
     });
 
     // Log position distribution
@@ -411,7 +382,6 @@ export class RoadmapTimeline {
     issuesWithPositions.forEach(p => {
       positionDist[p.row] = (positionDist[p.row] || 0) + 1;
     });
-    console.log('[RoadmapTimeline] Position distribution:', positionDist);
 
     return issuesWithPositions;
   }
@@ -420,7 +390,6 @@ export class RoadmapTimeline {
    * Render an issue bar
    */
   renderIssueBar(issue, row = 0, outsideRange = false) {
-    console.log(`[renderIssueBar] ${issue.key}: row=${row}, outsideRange=${outsideRange}`);
     const startDate = this.getIssueStartDate(issue);
     const endDate = this.getIssueEndDate(issue);
     const { startDate: timelineStart, endDate: timelineEnd } = this.getDateRange();
@@ -538,10 +507,6 @@ export class RoadmapTimeline {
           const topPosition = sprint.row * 40 + 4;
           const startOverflowClass = sprint.startsBeforeTimeline ? 'start-overflow' : '';
 
-          console.log('[RoadmapTimeline] Sprint:', sprint.name);
-          console.log('[RoadmapTimeline]   start_date:', sprint.start_date, '| end_date:', sprint.end_date);
-          console.log('[RoadmapTimeline]   position:', sprint.position.toFixed(2) + '%', '| width:', sprint.width.toFixed(2) + '%', '| row:', sprint.row);
-          console.log('[RoadmapTimeline]   timeline range:', this.formatDate(this.filters.startDate), '-', this.formatDate(this.filters.endDate));
 
           return `
             <div class="sprint-overlay-bar ${startOverflowClass}"

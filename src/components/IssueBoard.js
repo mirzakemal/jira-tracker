@@ -5,6 +5,8 @@
 
 import { IssueCard } from './IssueCard.js';
 
+import logger from '../utils/logger.js';
+
 export class IssueBoard {
   constructor(client, onIssueUpdate) {
     this.client = client;
@@ -30,7 +32,7 @@ export class IssueBoard {
 
       return result;
     } catch (error) {
-      console.error('Failed to load issues:', error);
+      logger.error('[IssueBoard] Failed to load issues:', error);
       throw error;
     } finally {
       this.isLoading = false;

@@ -5,6 +5,9 @@ import { defineConfig } from 'vite';
 const jiraDomain = process.env.VITE_JIRA_DOMAIN || 'tenderboard.atlassian.net';
 
 export default defineConfig({
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production')
+  },
   server: {
     proxy: {
       '/rest': {

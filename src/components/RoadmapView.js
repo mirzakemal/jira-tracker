@@ -3,6 +3,7 @@
  * Main container for roadmap timeline view with filters
  */
 
+import logger from '../utils/logger.js';
 import { RoadmapToolbar, RoadmapToolbarStyles } from './RoadmapToolbar.js';
 import { RoadmapTimeline, RoadmapTimelineStyles } from './RoadmapTimeline.js';
 import { FilterPanelStyles } from './FilterPanel.js';
@@ -71,7 +72,7 @@ export class RoadmapView {
       // Store reference globally for router
       window.currentRoadmapView = this;
     } catch (error) {
-      console.error('[RoadmapView] Failed to load roadmap:', error);
+      logger.error('[RoadmapView] Failed to load roadmap:', error);
       this.isLoading = false;
       this.refresh();
     }

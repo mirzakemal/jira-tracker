@@ -85,11 +85,11 @@ The app will open at `http://localhost:5173`
    - Multiple filters can be combined
    - Filters are reflected in the URL for sharing
 
-5. **Manage Tags**:
+6. **Manage Tags**:
    - Click on the Tags cell in any row to add/remove tags
    - Tags are stored locally only
 
-6. **Save Views**:
+7. **Save Views**:
    - Configure your desired columns and filters
    - Click "Save View" to store the configuration
    - Load saved views later for quick access
@@ -200,7 +200,7 @@ This app uses the Jira Cloud REST API (read-only):
 
 ## Security Notes
 
-- Credentials are stored in browser localStorage
+- Credentials are encrypted and stored in browser localStorage
 - All Jira data is stored in browser IndexedDB
 - The app runs entirely in your browser - no data is sent to third parties
 - Never commit your API token to version control

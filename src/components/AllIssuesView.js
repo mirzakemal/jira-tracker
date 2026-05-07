@@ -7,6 +7,7 @@ import { FilterPanel, FilterPanelStyles } from './FilterPanel.js';
 import { TableView, TableViewStyles } from './TableView.js';
 import { SavedViewsMenu, SavedViewsMenuStyles } from './SavedViewsMenu.js';
 import { TagsManagerStyles } from './TagsManager.js';
+import logger from '../utils/logger.js';
 import { debounce } from '../utils/debounce.js';
 import {
   getAllIssues,
@@ -81,6 +82,9 @@ export class AllIssuesView {
     try {
       this.issues = await getAllIssues(this.filters);
 
+      // Guard against stale view after async gap
+      if (this._destroyed) return;
+
       // Load tags for all issues in a single batch query
       const issueKeys = this.issues.map(i => i.key);
       this.issueTags = await getTagsForIssues(issueKeys);
@@ -91,6 +95,8 @@ export class AllIssuesView {
         this.filterOptionsLoaded = true;
       }
 
+      if (this._destroyed) return;
+
       this.isLoading = false;
       this.refresh();
 
@@ -100,7 +106,7 @@ export class AllIssuesView {
       // Store reference globally for router
       window.currentAllIssuesView = this;
     } catch (error) {
-      console.error('[AllIssuesView] Failed to load issues:', error);
+      logger.error('[AllIssuesView] Failed to load issues:', error);
       if (this._destroyed) return;
       this.isLoading = false;
       this.refresh();
@@ -126,7 +132,7 @@ export class AllIssuesView {
       // Update URL with current filters
       this.updateUrlFilters();
     } catch (error) {
-      console.error('[AllIssuesView] Failed to load issues:', error);
+      logger.error('[AllIssuesView] Failed to load issues:', error);
     }
   }
 
