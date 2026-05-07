@@ -161,76 +161,8 @@ class JiraClient {
     return await this.request(endpoint);
   }
 
-  /**
-   * Create a new issue
-   */
-  async createIssue(projectKey, summary, issueType, options = {}) {
-    const body = {
-      fields: {
-        project: { key: projectKey },
-        summary,
-        issuetype: { name: issueType },
-        ...options
-      }
-    };
-
-    return await this.request('/rest/api/3/issue', {
-      method: 'POST',
-      body: JSON.stringify(body)
-    });
-  }
-
-  /**
-   * Update an issue
-   */
-  async updateIssue(key, updates) {
-    return await this.request(`/rest/api/3/issue/${key}`, {
-      method: 'PUT',
-      body: JSON.stringify({ fields: updates })
-    });
-  }
-
-  /**
-   * Get available transitions for an issue
-   */
-  async getTransitions(key) {
-    const result = await this.request(`/rest/api/3/issue/${key}/transitions`);
-    return result.transitions || [];
-  }
-
-  /**
-   * Transition an issue to a new status
-   */
-  async transitionIssue(key, transitionId) {
-    return await this.request(`/rest/api/3/issue/${key}/transitions`, {
-      method: 'POST',
-      body: JSON.stringify({ transition: { id: transitionId } })
-    });
-  }
-
-  /**
-   * Delete an issue
-   */
-  async deleteIssue(key) {
-    return await this.request(`/rest/api/3/issue/${key}`, {
-      method: 'DELETE'
-    });
-  }
-
-  /**
-   * Get issue types for a project
-   */
-  async getIssueTypes(projectKey) {
-    const project = await this.request(`/rest/api/3/project/${projectKey}`);
-    return project.issueTypes || [];
-  }
-
-  /**
-   * Get assignee candidates for a project
-   */
-  async getAssignableUsers(projectKey) {
-    return await this.request(`/rest/api/3/user/assignable/search?project=${projectKey}`);
-  }
+  // All write operations (createIssue, updateIssue, transitionIssue, deleteIssue)
+  // have been removed. This app is read-only. Only GET requests to Jira are used.
 }
 
 /**

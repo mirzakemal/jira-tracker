@@ -223,7 +223,6 @@ export const modalCloseStyles = `
 
 export const formGroupStyles = `
   .form-group,
-  .filter-group,
   .toolbar-group,
   .tags-filter,
   .select-group {
@@ -237,7 +236,6 @@ export const formGroupStyles = `
   }
 
   .form-group label,
-  .filter-group label,
   .toolbar-group label,
   .tags-filter label,
   .select-group label {
@@ -256,8 +254,7 @@ export const formGroupStyles = `
     letter-spacing: normal;
   }
 
-  .form-group.full-width,
-  .filter-group.full-width {
+  .form-group.full-width {
     width: 100%;
     grid-column: 1 / -1;
   }
@@ -267,8 +264,6 @@ export const formInputStyles = `
   .form-group input,
   .form-group select,
   .form-group textarea,
-  .filter-input,
-  .filter-select,
   .toolbar-input,
   .toolbar-select,
   .tag-input,
@@ -283,8 +278,6 @@ export const formInputStyles = `
     transition: border-color 0.2s ease;
   }
 
-  .filter-input,
-  .filter-select,
   .toolbar-input,
   .toolbar-select,
   .tag-input {
@@ -296,8 +289,6 @@ export const formInputStyles = `
   .form-group input:focus,
   .form-group select:focus,
   .form-group textarea:focus,
-  .filter-input:focus,
-  .filter-select:focus,
   .toolbar-input:focus,
   .toolbar-select:focus,
   .tag-input:focus,
@@ -504,7 +495,6 @@ export const panelBaseStyles = `
   .panel,
   .settings-panel,
   .board-selector,
-  .filter-panel,
   .roadmap-toolbar,
   .sync-status,
   .table-view,
@@ -531,10 +521,6 @@ export const panelBaseStyles = `
 
   .board-selector {
     padding: 15px 20px;
-  }
-
-  .filter-panel {
-    margin-bottom: 16px;
   }
 
   .roadmap-toolbar {

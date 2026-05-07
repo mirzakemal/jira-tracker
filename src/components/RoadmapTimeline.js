@@ -110,6 +110,21 @@ export class RoadmapTimeline {
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
 
+  _getGroupLabel() {
+    const labels = {
+      epic: 'Epic',
+      issue_type: 'Issue Type',
+      fix_version: 'Fix Version',
+      status: 'Status',
+      assignee: 'Assignee'
+    };
+    return labels[this.filters.groupBy] || 'Group';
+  }
+
+  _hasRealDates(issue) {
+    return !!(issue.start_date || issue.due_date || issue.sprint_id);
+  }
+
   /**
    * Get issue start date (with fallbacks)
    */
@@ -210,9 +225,10 @@ export class RoadmapTimeline {
    */
   render() {
     const { groupedData, sprints } = this.roadmapData;
+    const sortedGroups = [...groupedData].sort((a, b) => b.issues.length - a.issues.length);
     const periods = this.generateTimelineHeader();
 
-    if (!groupedData || groupedData.length === 0) {
+    if (!sortedGroups || sortedGroups.length === 0) {
       return `
         <div class="roadmap-timeline">
           <div class="roadmap-empty">
@@ -227,22 +243,27 @@ export class RoadmapTimeline {
       <div class="roadmap-timeline" id="roadmap-timeline">
         <div class="timeline-container">
           <div class="timeline-header">
-            <div class="timeline-gantt-header">
-              ${periods.map(period => `
-                <div class="timeline-period" style="left: ${period.position}%; width: ${period.width}%;">
-                  ${this.escapeHtml(period.label)}
-                </div>
-              `).join('')}
+            <div class="timeline-header-left">
+              <span class="timeline-column-label">${this._getGroupLabel()}</span>
             </div>
-            ${sprints.length > 0 ? `
-              <div class="sprint-overlay-container">
-                ${this.renderSprintOverlay(sprints)}
+            <div class="timeline-header-scroll">
+              <div class="timeline-gantt-header">
+                ${periods.map(period => `
+                  <div class="timeline-period" style="left: ${period.position}%; width: ${period.width}%;">
+                    ${this.escapeHtml(period.label)}
+                  </div>
+                `).join('')}
               </div>
-            ` : ''}
+              ${sprints.length > 0 ? `
+                <div class="sprint-overlay-container">
+                  ${this.renderSprintOverlay(sprints)}
+                </div>
+              ` : ''}
+            </div>
           </div>
 
           <div class="timeline-body">
-            ${groupedData.map(group => this.renderSwimlane(group, periods)).join('')}
+            ${sortedGroups.map(group => this.renderSwimlane(group, periods)).join('')}
           </div>
         </div>
       </div>
@@ -278,7 +299,7 @@ export class RoadmapTimeline {
           ${periods.map(period => `
             <div class="timeline-period-grid" style="left: ${period.position}%; width: ${period.width}%;"></div>
           `).join('')}
-          ${issuesWithPositions.map(item => this.renderIssueBar(item.issue, item.row, item.outsideRange)).join('')}
+          ${issuesWithPositions.map(item => this.renderIssueBar(item.issue, item.row, item.outsideRange, item.hasRealDates)).join('')}
         </div>
       </div>
     `;
@@ -288,8 +309,7 @@ export class RoadmapTimeline {
    * Calculate vertical row positions for overlapping issues
    */
   calculateIssuePositions(issues) {
-    const rows = []; // Array where rows[i] = endPercent of last issue in row i (for visible issues)
-    const outsideRangeRows = []; // Array tracking rows used by outside-range issues
+    const rows = []; // Array where rows[i] = endPercent of last issue in row i
     const issuesWithPositions = [];
 
     const { startDate, endDate } = this.getDateRange();
@@ -316,30 +336,11 @@ export class RoadmapTimeline {
 
       // Issues outside visible range - still find a proper row to avoid overlap
       if (clippedEnd < 0 || clippedStart > 100) {
-
-        // Find first available row for outside-range issues
-        let rowNum = 0;
-        let foundRow = false;
-        for (let i = 0; i < outsideRangeRows.length; i++) {
-          if (outsideRangeRows[i] === undefined || outsideRangeRows[i] === null) {
-            rowNum = i;
-            foundRow = true;
-            break;
-          }
-        }
-
-        if (!foundRow) {
-          rowNum = outsideRangeRows.length;
-        }
-
-        // Mark row as used (use 100 as placeholder end value)
-        outsideRangeRows[rowNum] = 100;
-
-
         issuesWithPositions.push({
           issue,
-          row: rowNum,
-          outsideRange: true
+          row: 0,
+          outsideRange: true,
+          hasRealDates: this._hasRealDates(issue)
         });
         return;
       }
@@ -347,7 +348,6 @@ export class RoadmapTimeline {
       // Find first row where this issue fits (starts after previous issue ends)
       let rowNum = 0;
       let foundRow = false;
-
 
       for (let i = 0; i < rows.length; i++) {
         // Issue can fit in this row if it starts at or after where the row's last issue ends
@@ -368,19 +368,9 @@ export class RoadmapTimeline {
       issuesWithPositions.push({
         issue,
         row: rowNum,
-        outsideRange: false
+        outsideRange: false,
+        hasRealDates: this._hasRealDates(issue)
       });
-    });
-
-
-    // Log issuesWithPositions detail
-    issuesWithPositions.forEach((item, idx) => {
-    });
-
-    // Log position distribution
-    const positionDist = {};
-    issuesWithPositions.forEach(p => {
-      positionDist[p.row] = (positionDist[p.row] || 0) + 1;
     });
 
     return issuesWithPositions;
@@ -389,55 +379,73 @@ export class RoadmapTimeline {
   /**
    * Render an issue bar
    */
-  renderIssueBar(issue, row = 0, outsideRange = false) {
+  renderIssueBar(issue, row = 0, outsideRange = false, hasRealDates = true) {
+    // Issues completely outside timeline — skip entirely
+    if (outsideRange) return '';
+
     const startDate = this.getIssueStartDate(issue);
     const endDate = this.getIssueEndDate(issue);
     const { startDate: timelineStart, endDate: timelineEnd } = this.getDateRange();
 
-    // Check if issue starts before timeline
+    // No-date issues render as a milestone diamond at created_at position
+    if (!hasRealDates) {
+      const createdDate = issue.created_at ? new Date(issue.created_at) : timelineStart;
+      const pos = this.getDatePosition(createdDate);
+      if (pos < 0 || pos > 100) return '';
+
+      const statusColor = this.getStatusColor(issue.status);
+      const topPosition = row * 32 + 6;
+
+      return `
+        <div class="issue-milestone ${statusColor}"
+             data-issue-key="${this.escapeHtml(issue.key)}"
+             style="left: ${pos}%; top: ${topPosition}px; z-index: ${5 + row};"
+             title="${this.escapeHtml(`${issue.key}: ${issue.summary || ''}\nStatus: ${issue.status || 'Unknown'}\nNo date range — estimated from created date`)}">
+          <span class="milestone-key">${this.escapeHtml(issue.key)}</span>
+        </div>
+      `;
+    }
+
     const startsBeforeTimeline = startDate < timelineStart;
+    const endsAfterTimeline = endDate > timelineEnd;
 
-    // Calculate position and width with timeline bounds checking
-    const position = startsBeforeTimeline ? 0 : Math.max(0, this.getDatePosition(startDate));
-    const endDateForWidth = endDate > startDate ? endDate : new Date(startDate.getTime() + (14 * 24 * 60 * 60 * 1000)); // Minimum 14 days
-    let width = this.getBarWidth(startDate, endDateForWidth);
+    // Use clipped bounds for rendering (matching row assignment)
+    const effectiveStart = startsBeforeTimeline ? timelineStart : startDate;
+    const effectiveEnd = endsAfterTimeline ? timelineEnd : endDate;
 
-    // Ensure minimum width for visibility
-    width = Math.max(width, 2); // Minimum 2% width
+    let position = this.getDatePosition(effectiveStart);
+    let width = this.getBarWidth(effectiveStart, effectiveEnd);
+
+    // Minimum visible width, cap at right edge
+    width = Math.max(width, 0.5);
+    if (position + width > 100) {
+      width = 100 - position;
+    }
 
     const statusColor = this.getStatusColor(issue.status);
-    const topPosition = row * 32; // 28px height + 4px gap
+    const topPosition = row * 32;
 
-    // Add class for bars extending beyond timeline
-    const endsAfterTimeline = endDate > timelineEnd;
     const extendsClass = startsBeforeTimeline || endsAfterTimeline ? 'extends-beyond' : '';
     const startOverflowClass = startsBeforeTimeline ? 'start-overflow' : '';
+    const narrowClass = width < 5 ? 'bar-narrow' : '';
+    const tinyClass = width < 2 ? 'bar-tiny' : '';
 
-    // Format tooltip
     const tooltipLines = [
       `${issue.key}: ${issue.summary || ''}`,
       `Status: ${issue.status || 'Unknown'}`,
       issue.assignee_name ? `Assignee: ${issue.assignee_name}` : null,
       issue.start_date ? `Start: ${this.formatDate(issue.start_date)}` : null,
       issue.due_date ? `Due: ${this.formatDate(issue.due_date)}` : null,
-      issue.fix_version ? `Version: ${issue.fix_version}` : null,
-      `Row: ${row}` // Debug: show assigned row
+      issue.fix_version ? `Version: ${issue.fix_version}` : null
     ].filter(Boolean);
 
-    const tooltip = tooltipLines.join('\n');
-
-    // Calculate z-index based on row (higher rows on top)
-    const zIndex = 5 + row;
-
     return `
-      <div class="issue-bar ${statusColor} ${extendsClass} ${startOverflowClass}"
+      <div class="issue-bar ${statusColor} ${extendsClass} ${startOverflowClass} ${narrowClass} ${tinyClass}"
            data-issue-key="${this.escapeHtml(issue.key)}"
-           data-row="${row}"
-           style="left: ${position}%; width: ${width}%; top: ${topPosition}px; z-index: ${zIndex};"
-           title="${this.escapeHtml(tooltip)}">
+           style="left: ${position}%; width: ${width}%; top: ${topPosition}px; z-index: ${5 + row};"
+           title="${this.escapeHtml(tooltipLines.join('\n'))}">
         <span class="issue-bar-key">${this.escapeHtml(issue.key)}</span>
         <span class="issue-bar-summary">${this.escapeHtml(issue.summary || '')}</span>
-        <span class="issue-bar-row">R${row}</span>
       </div>
     `;
   }
@@ -537,6 +545,15 @@ export class RoadmapTimeline {
         }
       });
     });
+
+    // Sync header horizontal scroll with timeline body
+    const body = document.querySelector('.timeline-body');
+    const headerScroll = document.querySelector('.timeline-header-scroll');
+    if (body && headerScroll) {
+      body.addEventListener('scroll', () => {
+        headerScroll.scrollLeft = body.scrollLeft;
+      });
+    }
   }
 
   /**
@@ -561,22 +578,45 @@ export const RoadmapTimelineStyles = `
   }
 
   .timeline-header {
+    display: flex;
     border-bottom: 1px solid var(--border);
     background: var(--background);
     flex-shrink: 0;
     position: relative;
   }
 
+  .timeline-header-left {
+    width: 220px;
+    min-width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+    padding: 8px 16px;
+    border-right: 1px solid var(--border);
+  }
+
+  .timeline-column-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .timeline-header-scroll {
+    flex: 1;
+    overflow-x: hidden;
+    min-width: 0;
+  }
+
   .timeline-gantt-header {
     display: flex;
     height: 48px;
     position: relative;
-    margin-left: 220px;
   }
 
   .sprint-overlay-container {
     position: relative;
-    margin-left: 220px;
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--border);
@@ -692,7 +732,7 @@ export const RoadmapTimelineStyles = `
     position: relative;
     min-height: 60px;
     padding: 8px 10px;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .timeline-period-grid {
@@ -728,6 +768,18 @@ export const RoadmapTimelineStyles = `
     z-index: 100 !important;
   }
 
+  .issue-bar.bar-narrow .issue-bar-summary {
+    display: none;
+  }
+
+  .issue-bar.bar-tiny .issue-bar-key {
+    display: none;
+  }
+
+  .issue-bar.bar-tiny .issue-bar-summary {
+    display: none;
+  }
+
   .issue-bar-key {
     font-weight: 600;
     font-size: 11px;
@@ -745,17 +797,38 @@ export const RoadmapTimelineStyles = `
     max-width: 100%;
   }
 
-  .issue-bar-row {
+  .issue-milestone {
     position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    transform: translateX(-6px) rotate(45deg);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  .issue-milestone:hover {
+    transform: translateX(-6px) rotate(45deg) scale(1.3);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+    z-index: 100 !important;
+  }
+
+  .milestone-key {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-45deg);
     font-size: 9px;
-    font-weight: 700;
-    opacity: 0.6;
-    background: rgba(0, 0, 0, 0.2);
-    padding: 1px 4px;
-    border-radius: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s;
+    color: var(--text-primary);
+  }
+
+  .issue-milestone:hover .milestone-key {
+    opacity: 1;
   }
 
   .issue-bar.extends-beyond {
@@ -791,29 +864,6 @@ export const RoadmapTimelineStyles = `
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
-  }
-
-  .issue-milestone {
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 10px solid;
-    cursor: pointer;
-    transform: translateX(-50%);
-    z-index: 3;
-  }
-
-  .milestone-label {
-    position: absolute;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 9px;
-    white-space: nowrap;
-    color: var(--text);
-    font-weight: 500;
   }
 
 `;

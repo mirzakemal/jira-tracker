@@ -133,7 +133,7 @@ export function filtersToParams(filters) {
   const params = {};
 
   // Simple value filters
-  const simpleFilters = ['projectKey', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
+  const simpleFilters = ['projectKey', 'boardId', 'sprintId', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
   simpleFilters.forEach(key => {
     if (filters[key]) {
       params[key] = filters[key];
@@ -141,7 +141,7 @@ export function filtersToParams(filters) {
   });
 
   // Array filters - can be multiple values
-  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag'];
+  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag', 'priority'];
   arrayFilters.forEach(key => {
     if (filters[key] && Array.isArray(filters[key]) && filters[key].length > 0) {
       params[key] = filters[key];
@@ -161,7 +161,7 @@ export function paramsToFilters(params) {
   const filters = {};
 
   // Simple value filters
-  const simpleFilters = ['projectKey', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
+  const simpleFilters = ['projectKey', 'boardId', 'sprintId', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
   simpleFilters.forEach(key => {
     if (params[key]) {
       filters[key] = params[key];
@@ -169,7 +169,7 @@ export function paramsToFilters(params) {
   });
 
   // Array filters - can be multiple values
-  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag'];
+  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag', 'priority'];
   arrayFilters.forEach(key => {
     if (params[key]) {
       filters[key] = Array.isArray(params[key]) ? params[key] : [params[key]];

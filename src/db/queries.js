@@ -33,6 +33,7 @@ let filterOptionsCache = {
   products: null,
   users: null,
   tags: null,
+  priorities: null,
   timestamp: 0
 };
 
@@ -57,6 +58,7 @@ export function invalidateFilterCache() {
     products: null,
     users: null,
     tags: null,
+    priorities: null,
     timestamp: 0
   };
 }
@@ -162,6 +164,11 @@ export async function getAllIssues(filters = {}) {
     // Multi-select issueType filter
     if (filters.issueType && Array.isArray(filters.issueType) && filters.issueType.length > 0) {
       if (!filters.issueType.includes(issue.issue_type)) return false;
+    }
+
+    // Multi-select priority filter
+    if (filters.priority && Array.isArray(filters.priority) && filters.priority.length > 0) {
+      if (!filters.priority.includes(issue.priority)) return false;
     }
 
     // Date filters
@@ -399,6 +406,27 @@ export async function getIssueTypes(projectKey = null) {
   filterOptionsCache.issueTypes = types;
   filterOptionsCache.timestamp = Date.now();
   return types;
+}
+
+/**
+ * Get all issue priorities - uses cache
+ */
+export async function getPriorities() {
+  if (isCacheValid() && filterOptionsCache.priorities !== null) {
+    return filterOptionsCache.priorities;
+  }
+
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+  const priorities = [...new Set(
+    issues
+      .filter(i => i.priority)
+      .map(i => i.priority)
+  )].sort();
+
+  filterOptionsCache.priorities = priorities;
+  filterOptionsCache.timestamp = Date.now();
+  return priorities;
 }
 
 /**

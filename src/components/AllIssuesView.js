@@ -6,7 +6,6 @@
 import { FilterPanel, FilterPanelStyles } from './FilterPanel.js';
 import { TableView, TableViewStyles } from './TableView.js';
 import { SavedViewsMenu, SavedViewsMenuStyles } from './SavedViewsMenu.js';
-import { TagsManagerStyles } from './TagsManager.js';
 import logger from '../utils/logger.js';
 import { debounce } from '../utils/debounce.js';
 import {
@@ -18,9 +17,11 @@ import {
   getStatuses,
   getIssueTypes,
   getAllTags,
+  getPriorities,
   getTagsForIssues,
-  invalidateFilterCache,
-  getAllProjects
+  getAllProjects,
+  getAllBoards,
+  getAllSprints
 } from '../db/queries.js';
 
 export class AllIssuesView {
@@ -153,6 +154,8 @@ export class AllIssuesView {
   async loadFilterOptions() {
     this.availableFilterOptions = {
       projects: await getAllProjects(),
+      boards: await getAllBoards(),
+      sprints: await getAllSprints(),
       status: await getStatuses(),
       fixVersion: await getFixVersions(),
       customer: await getCustomers(),
@@ -163,6 +166,7 @@ export class AllIssuesView {
       codeReviewer1: await getAllUsers(),
       codeReviewer2: await getAllUsers(),
       issueType: await getIssueTypes(),
+      priority: await getPriorities(),
       tags: await getAllTags()
     };
   }
@@ -279,9 +283,9 @@ export class AllIssuesView {
     }
 
     // Update the issue count in the filter panel header
-    const filterPanelHeader = document.querySelector('#filter-panel-container .filter-header h3');
-    if (filterPanelHeader) {
-      filterPanelHeader.textContent = `Filters (${this.issues.length} issues)`;
+    const filterCount = document.querySelector('#filter-panel-container .filter-issue-count');
+    if (filterCount) {
+      filterCount.textContent = `${this.issues.length} issues`;
     }
 
     // Update URL with current filters
@@ -378,7 +382,6 @@ export class AllIssuesView {
  */
 export const AllIssuesViewStyles = `
   .all-issues-view {
-    padding: 20px;
     max-width: 1600px;
     margin: 0 auto;
   }
