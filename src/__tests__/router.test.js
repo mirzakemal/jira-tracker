@@ -7,6 +7,9 @@ describe('ROUTES', () => {
       BOARD: 'board',
       ALL_ISSUES: 'all-issues',
       ROADMAP: 'roadmap',
+      VELOCITY: 'velocity',
+      WORKLOAD: 'workload',
+      AGING: 'aging',
       SETTINGS: 'settings'
     });
   });

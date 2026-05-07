@@ -550,6 +550,40 @@ export async function getTags(issueKey) {
 }
 
 /**
+ * Get issue aging report — days in current status
+ * Sorted by staleness (oldest first)
+ */
+export async function getIssueAging(filters = {}) {
+  await initDatabase();
+  let issues = await getAll(STORES.ISSUES);
+
+  if (filters.boardId) {
+    issues = issues.filter(i => i.board_id === filters.boardId);
+  }
+  if (filters.sprintId) {
+    issues = issues.filter(i => i.sprint_id === filters.sprintId);
+  }
+
+  const now = new Date();
+  const aged = issues.map(issue => {
+    const updated = issue.updated_at ? new Date(issue.updated_at) : null;
+    const daysInStatus = updated
+      ? Math.max(0, Math.floor((now - updated) / (1000 * 60 * 60 * 24)))
+      : null;
+    return { ...issue, daysInStatus };
+  });
+
+  aged.sort((a, b) => {
+    if (a.daysInStatus === null && b.daysInStatus === null) return 0;
+    if (a.daysInStatus === null) return 1;
+    if (b.daysInStatus === null) return -1;
+    return b.daysInStatus - a.daysInStatus;
+  });
+
+  return aged;
+}
+
+/**
  * Get all distinct tags - uses cache
  */
 export async function getAllTags() {
@@ -598,6 +632,41 @@ export async function getTagsForIssues(issueKeys) {
   }
 
   return tagsByIssue;
+}
+
+/**
+ * Search issues by key or summary (fuzzy matching)
+ * Returns max 20 results sorted by relevance
+ */
+export async function searchIssues(query = '') {
+  await initDatabase();
+  const all = await getAll(STORES.ISSUES);
+  if (!query || !query.trim()) return [];
+
+  const q = query.toLowerCase().trim();
+
+  const scored = all
+    .map(issue => {
+      let score = 0;
+      const key = (issue.key || '').toLowerCase();
+      const summary = (issue.summary || '').toLowerCase();
+
+      if (key === q) score = 100;
+      else if (key.startsWith(q)) score = 80;
+      else if (key.includes(q)) score = 60;
+
+      if (summary === q) score += 50;
+      else if (summary.startsWith(q)) score += 30;
+      else if (summary.includes(q)) score += 10;
+
+      return { issue, score };
+    })
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20)
+    .map(s => s.issue);
+
+  return scored;
 }
 
 // ==================== Saved Views Management ====================
@@ -1015,5 +1084,158 @@ export async function getRoadmapData(filters = {}) {
     issues,
     groupedData,
     groupBy
+  };
+}
+
+/**
+ * Get sprint velocity data for retrospective dashboard
+ * Returns past sprints with completion metrics
+ */
+export async function getSprintVelocity(boardId = null) {
+  await initDatabase();
+  const [sprints, issues, users] = await Promise.all([
+    getAll(STORES.SPRINTS),
+    getAll(STORES.ISSUES),
+    getAll(STORES.USERS)
+  ]);
+
+  let targetSprints = sprints;
+  if (boardId) {
+    targetSprints = sprints.filter(s => s.board_id === boardId);
+  }
+
+  // Build user name map
+  const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
+
+  const sprintData = targetSprints
+    .map(sprint => {
+      const sprintIssues = issues.filter(i => i.sprint_id === sprint.id);
+      const total = sprintIssues.length;
+      const completed = sprintIssues.filter(i => {
+        const sc = (i.status_category || '').toLowerCase();
+        return sc.includes('done') || sc.includes('closed') || sc.includes('resolved');
+      }).length;
+
+      // Completion rate as percentage
+      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      // Assignee breakdown
+      const assigneeMap = new Map();
+      sprintIssues.forEach(i => {
+        const name = i.assignee_id ? (userMap.get(i.assignee_id) || i.assignee_name || 'Unassigned') : 'Unassigned';
+        const done = (i.status_category || '').toLowerCase();
+        const isDone = done.includes('done') || done.includes('closed') || done.includes('resolved');
+        if (!assigneeMap.has(name)) {
+          assigneeMap.set(name, { total: 0, completed: 0 });
+        }
+        const entry = assigneeMap.get(name);
+        entry.total++;
+        if (isDone) entry.completed++;
+      });
+
+      const assignees = Array.from(assigneeMap.entries())
+        .map(([name, counts]) => ({ name, ...counts }))
+        .sort((a, b) => b.total - a.total);
+
+      return {
+        id: sprint.id,
+        name: sprint.name,
+        state: sprint.state || 'unknown',
+        start_date: sprint.start_date,
+        end_date: sprint.end_date,
+        total,
+        completed,
+        rate,
+        assignees
+      };
+    })
+    .filter(s => s.total > 0)
+    .sort((a, b) => {
+      const ad = a.start_date ? new Date(a.start_date) : new Date(0);
+      const bd = b.start_date ? new Date(b.start_date) : new Date(0);
+      return bd - ad;
+    });
+
+  const allCompleted = sprintData.reduce((sum, s) => sum + s.completed, 0);
+  const allTotal = sprintData.reduce((sum, s) => sum + s.total, 0);
+  const averageVelocity = sprintData.length > 0
+    ? Math.round(allCompleted / sprintData.length)
+    : 0;
+  const overallRate = allTotal > 0 ? Math.round((allCompleted / allTotal) * 100) : 0;
+
+  return {
+    sprints: sprintData,
+    summary: {
+      totalSprints: sprintData.length,
+      totalIssues: allTotal,
+      totalCompleted: allCompleted,
+      averageVelocity,
+      overallRate
+    }
+  };
+}
+
+/**
+ * Get team workload heatmap data
+ */
+export async function getTeamWorkload(filters = {}) {
+  await initDatabase();
+  const [issues, users] = await Promise.all([
+    getAll(STORES.ISSUES),
+    getAll(STORES.USERS)
+  ]);
+
+  let filtered = issues;
+  if (filters.boardId) {
+    filtered = filtered.filter(i => i.board_id === filters.boardId);
+  }
+  if (filters.sprintId) {
+    filtered = filtered.filter(i => i.sprint_id === filters.sprintId);
+  }
+
+  const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
+
+  const workload = new Map();
+  filtered.forEach(issue => {
+    const assigneeId = issue.assignee_id || 'unassigned';
+    const assigneeName = issue.assignee_name || userMap.get(assigneeId) || 'Unassigned';
+    if (!workload.has(assigneeId)) {
+      workload.set(assigneeId, {
+        id: assigneeId,
+        name: assigneeName,
+        statuses: new Map(),
+        total: 0
+      });
+    }
+    const person = workload.get(assigneeId);
+    const status = issue.status || 'Unknown';
+    if (!person.statuses.has(status)) {
+      person.statuses.set(status, { count: 0, issues: [] });
+    }
+    person.statuses.get(status).count++;
+    person.statuses.get(status).issues.push({
+      key: issue.key,
+      summary: issue.summary,
+      priority: issue.priority,
+      issue_type: issue.issue_type
+    });
+    person.total++;
+  });
+
+  const result = Array.from(workload.values())
+    .map(p => ({
+      ...p,
+      statuses: Array.from(p.statuses.entries())
+        .map(([status, data]) => ({ status, ...data }))
+        .sort((a, b) => b.count - a.count)
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  const allStatuses = [...new Set(filtered.map(i => i.status).filter(Boolean))].sort();
+
+  return {
+    people: result,
+    statuses: allStatuses,
+    totalIssues: filtered.length
   };
 }

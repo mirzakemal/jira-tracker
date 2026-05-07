@@ -6,6 +6,7 @@
 import { FilterPanel, FilterPanelStyles } from './FilterPanel.js';
 import { TableView, TableViewStyles } from './TableView.js';
 import { SavedViewsMenu, SavedViewsMenuStyles } from './SavedViewsMenu.js';
+import { openIssueDrawer } from './IssueDetailDrawer.js';
 import logger from '../utils/logger.js';
 import { debounce } from '../utils/debounce.js';
 import {
@@ -222,6 +223,9 @@ export class AllIssuesView {
             <h2>All Issues</h2>
           </div>
           <div class="view-header-right">
+            <button class="btn btn-secondary export-btn" id="export-csv-btn" title="Export filtered issues as CSV">
+              Export CSV
+            </button>
             ${hasActiveFilters ? `
               <button class="clear-filters-btn" id="clear-filters-btn" title="Clear all filters">
                 Clear Filters
@@ -356,6 +360,11 @@ export class AllIssuesView {
     clearFiltersBtn?.addEventListener('click', () => {
       this.handleClearFilters();
     });
+
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+    exportCsvBtn?.addEventListener('click', () => {
+      this.exportCSV();
+    });
   }
 
   /**
@@ -367,13 +376,38 @@ export class AllIssuesView {
   }
 
   /**
-   * Open issue in Jira
+   * Open issue detail drawer
    */
   openIssue(issueKey) {
-    const url = this.jiraDomain
-      ? `https://${this.jiraDomain.replace(/^https?:\/\//, '')}/browse/${issueKey}`
-      : `/browse/${issueKey}`;
-    window.open(url, '_blank');
+    openIssueDrawer(issueKey, this.jiraDomain, () => {
+      // clean up - overlay auto-removes in drawer close handler
+    });
+  }
+
+  exportCSV() {
+    if (!this.issues || this.issues.length === 0) return;
+    const quote = (str) => `"${(str ?? '').replace(/"/g, '""')}"`;
+    const headers = ['Key', 'Summary', 'Issue Type', 'Status', 'Priority', 'Assignee', 'Reporter', 'Fix Version', 'Created', 'Updated'];
+    const rows = this.issues.map(i => [
+      i.key,
+      quote(i.summary),
+      quote(i.issue_type),
+      quote(i.status),
+      quote(i.priority),
+      quote(i.assignee_name || 'Unassigned'),
+      quote(i.reporter_name),
+      quote(i.fix_version),
+      i.created_at || '',
+      i.updated_at || ''
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `jira-issues-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 }
 

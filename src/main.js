@@ -5,6 +5,11 @@ import { BoardSelector } from './components/BoardSelector.js'
 import { IssueBoard } from './components/IssueBoard.js'
 import { AllIssuesView, AllIssuesViewStyles } from './components/AllIssuesView.js'
 import { RoadmapView, RoadmapViewStyles } from './components/RoadmapView.js'
+import { SprintVelocityView, SprintVelocityViewStyles } from './components/SprintVelocityView.js'
+import { TeamWorkloadView, TeamWorkloadViewStyles } from './components/TeamWorkloadView.js'
+import { IssueAgingView, IssueAgingViewStyles } from './components/IssueAgingView.js'
+import { QuickSearchPalette, QuickSearchPaletteStyles } from './components/QuickSearchPalette.js'
+import { IssueDetailDrawerStyles } from './components/IssueDetailDrawer.js'
 import { SyncStatus, SyncStatusStyles } from './components/SyncStatus.js'
 import { FilterPanelStyles } from './components/FilterPanel.js'
 import { TableViewStyles } from './components/TableView.js'
@@ -66,6 +71,18 @@ async function init() {
   // Set up route listener to handle navigation after user is connected
   // Initial route is handled by autoConnect() which parses route before rendering
   onRouteChange(handleRouteChange)
+
+  // Global Cmd+K / Ctrl+K quick search shortcut
+  let quickSearchPalette = null
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.target.closest('input, textarea, select')) {
+      e.preventDefault()
+      if (!quickSearchPalette) {
+        quickSearchPalette = new QuickSearchPalette(state.jiraDomain || '')
+      }
+      quickSearchPalette.open()
+    }
+  })
 }
 
 /**
@@ -163,6 +180,69 @@ function handleRouteChange({ route, params }) {
       }
 
       loadIssues()
+    }
+  } else if (route === ROUTES.VELOCITY) {
+    logger.info('[Route] Switching to Sprint Velocity view')
+    if (state.currentView !== 'velocity') {
+      state.currentView = 'velocity'
+      updateViewToggle()
+
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) {
+        boardSelectorContainer.style.display = 'none'
+      }
+
+      cleanupCurrentView()
+
+      const velocityView = new SprintVelocityView()
+      state.currentViewInstance = velocityView
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = velocityView.render()
+        velocityView.load()
+      }
+    }
+  } else if (route === ROUTES.WORKLOAD) {
+    logger.info('[Route] Switching to Team Workload view')
+    if (state.currentView !== 'workload') {
+      state.currentView = 'workload'
+      updateViewToggle()
+
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) {
+        boardSelectorContainer.style.display = 'none'
+      }
+
+      cleanupCurrentView()
+
+      const workloadView = new TeamWorkloadView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = workloadView
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = workloadView.render()
+        workloadView.load(filters.boardId, filters.sprintId)
+      }
+    }
+  } else if (route === ROUTES.AGING) {
+    logger.info('[Route] Switching to Issue Aging view')
+    if (state.currentView !== 'aging') {
+      state.currentView = 'aging'
+      updateViewToggle()
+
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) {
+        boardSelectorContainer.style.display = 'none'
+      }
+
+      cleanupCurrentView()
+
+      const agingView = new IssueAgingView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = agingView
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = agingView.render()
+        agingView.load(filters.boardId, filters.sprintId)
+      }
     }
   }
 }
@@ -272,6 +352,15 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <button class="toggle-btn ${initialView === 'roadmap' ? 'active' : ''}" id="roadmap-view-btn">
                 Roadmap
               </button>
+              <button class="toggle-btn ${initialView === 'velocity' ? 'active' : ''}" id="velocity-view-btn">
+                Velocity
+              </button>
+              <button class="toggle-btn ${initialView === 'workload' ? 'active' : ''}" id="workload-view-btn">
+                Team
+              </button>
+              <button class="toggle-btn ${initialView === 'aging' ? 'active' : ''}" id="aging-view-btn">
+                Aging
+              </button>
             </div>
             <div id="sync-status-container"></div>
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
@@ -291,6 +380,9 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     document.getElementById('board-view-btn')?.addEventListener('click', switchToBoardView)
     document.getElementById('all-issues-view-btn')?.addEventListener('click', switchToAllIssuesView)
     document.getElementById('roadmap-view-btn')?.addEventListener('click', () => switchToRoadmapView())
+    document.getElementById('velocity-view-btn')?.addEventListener('click', () => switchToSprintVelocityView())
+    document.getElementById('workload-view-btn')?.addEventListener('click', () => switchToWorkloadView())
+    document.getElementById('aging-view-btn')?.addEventListener('click', () => switchToAgingView())
 
     // Render All Issues view BEFORE awaiting anything
     const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
@@ -328,6 +420,15 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <button class="toggle-btn" id="roadmap-view-btn">
                 Roadmap
               </button>
+              <button class="toggle-btn" id="velocity-view-btn">
+                Velocity
+              </button>
+              <button class="toggle-btn" id="workload-view-btn">
+                Team
+              </button>
+              <button class="toggle-btn" id="aging-view-btn">
+                Aging
+              </button>
             </div>
             <div id="sync-status-container"></div>
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
@@ -349,6 +450,9 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     document.getElementById('board-view-btn')?.addEventListener('click', switchToBoardView)
     document.getElementById('all-issues-view-btn')?.addEventListener('click', switchToAllIssuesView)
     document.getElementById('roadmap-view-btn')?.addEventListener('click', () => switchToRoadmapView())
+    document.getElementById('velocity-view-btn')?.addEventListener('click', () => switchToSprintVelocityView())
+    document.getElementById('workload-view-btn')?.addEventListener('click', () => switchToWorkloadView())
+    document.getElementById('aging-view-btn')?.addEventListener('click', () => switchToAgingView())
 
     // Initialize sync status in background
     renderSyncStatus().catch(() => {})
@@ -546,6 +650,11 @@ function addGlobalStyles() {
     ${SavedViewsMenuStyles}
     ${TagsManagerStyles}
     ${RoadmapViewStyles || ''}
+    ${SprintVelocityViewStyles || ''}
+    ${TeamWorkloadViewStyles || ''}
+    ${IssueAgingViewStyles || ''}
+    ${QuickSearchPaletteStyles || ''}
+    ${IssueDetailDrawerStyles || ''}
     ${AllIssuesViewStyles || ''}
 
     .header-actions {
@@ -846,6 +955,114 @@ async function switchToRoadmapView(filters = {}) {
   roadmapView.loadRoadmap(filters)
 }
 
+async function switchToSprintVelocityView(filters = {}) {
+  cleanupCurrentView()
+  state.currentView = 'velocity'
+  updateViewToggle()
+
+  navigate(ROUTES.VELOCITY)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (container) {
+    container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading velocity data...</p></div>'
+  }
+
+  const velocityView = new SprintVelocityView()
+  state.currentViewInstance = velocityView
+  container.innerHTML = velocityView.render()
+  await velocityView.load()
+}
+
+async function switchToWorkloadView(filters = {}) {
+  cleanupCurrentView()
+  state.currentView = 'workload'
+  updateViewToggle()
+
+  navigate(ROUTES.WORKLOAD)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (container) {
+    container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading team workload...</p></div>'
+  }
+
+  const workloadView = new TeamWorkloadView(state.client, state.jiraDomain, switchToBoardView)
+  state.currentViewInstance = workloadView
+  container.innerHTML = workloadView.render()
+  await workloadView.load(filters.boardId, filters.sprintId)
+}
+
+/**
+ * Switch to Issue Aging view
+ */
+async function switchToAgingView(filters = {}) {
+  cleanupCurrentView()
+  state.currentView = 'aging'
+  updateViewToggle()
+
+  navigate(ROUTES.AGING)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (container) {
+    container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading issue aging report...</p></div>'
+  }
+
+  const agingView = new IssueAgingView(state.client, state.jiraDomain, switchToBoardView)
+  state.currentViewInstance = agingView
+  container.innerHTML = agingView.render()
+  await agingView.load(filters.boardId, filters.sprintId)
+}
+
 /**
  * Update view toggle buttons
  */
@@ -853,8 +1070,14 @@ function updateViewToggle() {
   const boardBtn = document.getElementById('board-view-btn')
   const allIssuesBtn = document.getElementById('all-issues-view-btn')
   const roadmapBtn = document.getElementById('roadmap-view-btn')
+  const velocityBtn = document.getElementById('velocity-view-btn')
+  const workloadBtn = document.getElementById('workload-view-btn')
+  const agingBtn = document.getElementById('aging-view-btn')
 
   if (boardBtn) boardBtn.classList.toggle('active', state.currentView === 'board')
   if (allIssuesBtn) allIssuesBtn.classList.toggle('active', state.currentView === 'all-issues')
   if (roadmapBtn) roadmapBtn.classList.toggle('active', state.currentView === 'roadmap')
+  if (velocityBtn) velocityBtn.classList.toggle('active', state.currentView === 'velocity')
+  if (workloadBtn) workloadBtn.classList.toggle('active', state.currentView === 'workload')
+  if (agingBtn) agingBtn.classList.toggle('active', state.currentView === 'aging')
 }

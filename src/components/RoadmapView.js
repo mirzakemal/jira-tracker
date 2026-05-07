@@ -6,6 +6,7 @@
 import logger from '../utils/logger.js';
 import { RoadmapToolbar, RoadmapToolbarStyles } from './RoadmapToolbar.js';
 import { RoadmapTimeline, RoadmapTimelineStyles } from './RoadmapTimeline.js';
+import { openIssueDrawer } from './IssueDetailDrawer.js';
 import { FilterPanelStyles } from './FilterPanel.js';
 import { TagsManagerStyles } from './TagsManager.js';
 import { SavedViewsMenuStyles } from './SavedViewsMenu.js';
@@ -98,13 +99,12 @@ export class RoadmapView {
   }
 
   /**
-   * Open issue in Jira
+   * Open issue detail drawer
    */
   openIssue(issueKey) {
-    const url = this.jiraDomain
-      ? `https://${this.jiraDomain.replace(/^https?:\/\//, '')}/browse/${issueKey}`
-      : `/browse/${issueKey}`;
-    window.open(url, '_blank');
+    openIssueDrawer(issueKey, this.jiraDomain, () => {
+      // clean up
+    });
   }
 
   /**

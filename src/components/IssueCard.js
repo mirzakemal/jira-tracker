@@ -95,12 +95,12 @@ export class IssueCard {
     });
 
     card.addEventListener('click', (e) => {
-      // Let links work normally
       if (e.target.tagName === 'A') return;
-      // Open issue in Jira in new tab
       const issueKey = card.dataset.issueKey;
-      if (issueKey && window.jiraDomain) {
-        window.open(`https://${(window.jiraDomain || '').replace(/^https?:\/\//, '')}/browse/${issueKey}`, '_blank');
+      if (issueKey) {
+        import('./IssueDetailDrawer.js').then(({ openIssueDrawer }) => {
+          openIssueDrawer(issueKey, window.jiraDomain || '', () => {});
+        });
       }
     });
   }
