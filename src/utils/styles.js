@@ -295,7 +295,7 @@ export const formInputStyles = `
   .view-name-input:focus,
   .tags-editor-add .tag-input:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .form-group small {
@@ -304,7 +304,7 @@ export const formInputStyles = `
   }
 
   .form-group small a {
-    color: var(--accent);
+    color: var(--primary);
   }
 
   .select-group select:disabled {
@@ -413,17 +413,17 @@ export const borderButtonStyles = `
   .clear-filters-btn:hover {
     background: var(--hover);
     color: var(--text);
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .clear-field-btn:hover {
     background: var(--hover);
     color: var(--text);
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .toolbar-btn:hover {
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 `
 
@@ -460,8 +460,8 @@ export const badgeBaseStyles = `
     align-items: center;
     gap: 4px;
     padding: 2px 8px;
-    background: var(--accent-bg);
-    color: var(--accent);
+    background: var(--primary-bg);
+    color: var(--primary);
     border-radius: 12px;
     font-size: 11px;
     font-weight: 500;
@@ -507,7 +507,7 @@ export const panelBaseStyles = `
 
   .settings-panel,
   .board-selector {
-    background: var(--code-bg);
+    background: var(--border-light);
     margin-bottom: 20px;
     box-shadow: none;
   }
@@ -588,7 +588,7 @@ export const spinnerStyles = `
     width: 40px;
     height: 40px;
     border: 3px solid var(--border);
-    border-top-color: var(--accent);
+    border-top-color: var(--primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
@@ -609,7 +609,7 @@ export const tagRemoveStyles = `
     height: 16px;
     border: none;
     background: transparent;
-    color: var(--accent);
+    color: var(--primary);
     cursor: pointer;
     border-radius: 50%;
     font-size: 14px;
@@ -629,7 +629,7 @@ export const tagRemoveStyles = `
 
   .tag-remove:hover,
   .tags-editor-existing .tag-remove:hover {
-    background: var(--accent);
+    background: var(--primary);
     color: white;
   }
 
@@ -669,7 +669,7 @@ export const tagsEditorBodyStyles = `
 
 export const issueLinkStyles = `
   .issue-link {
-    color: var(--accent);
+    color: var(--primary);
     text-decoration: none;
     font-size: 13px;
   }

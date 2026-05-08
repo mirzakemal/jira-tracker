@@ -178,8 +178,8 @@ export const ChangelogDrawerStyles = `
   }
   .changelog-count {
     font-size: 12px;
-    color: var(--accent, #64ffda);
-    background: color-mix(in srgb, var(--accent, #64ffda) 15%, transparent);
+    color: var(--primary, #6366f1);
+    background: color-mix(in srgb, var(--primary, #6366f1) 15%, transparent);
     padding: 3px 10px;
     border-radius: 12px;
   }
@@ -233,7 +233,7 @@ export const ChangelogDrawerStyles = `
   }
   .changelog-issue-key {
     font-weight: 600;
-    color: var(--accent, #64ffda);
+    color: var(--primary, #6366f1);
     font-size: 13px;
     display: inline-block;
     margin-right: 8px;

@@ -388,7 +388,7 @@ export const DashboardHomeViewStyles = `
 
   .velocity-bar {
     width: 70%;
-    background: var(--accent);
+    background: var(--primary);
     border-radius: 4px 4px 0 0;
     position: relative;
     min-height: 4px;
@@ -461,7 +461,7 @@ export const DashboardHomeViewStyles = `
 
   .risk-bar-fill {
     height: 100%;
-    background: var(--accent);
+    background: var(--primary);
     border-radius: 4px;
     transition: width 0.3s ease;
   }
@@ -552,7 +552,7 @@ export const DashboardHomeViewStyles = `
 
   .workload-bar-fill {
     height: 100%;
-    background: var(--accent);
+    background: var(--primary);
     border-radius: 4px;
     display: flex;
     align-items: center;

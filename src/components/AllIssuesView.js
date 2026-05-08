@@ -457,6 +457,6 @@ export const AllIssuesViewStyles = `
   .clear-filters-btn:hover {
     background: var(--hover);
     color: var(--text);
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 `;

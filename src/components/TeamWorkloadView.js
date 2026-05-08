@@ -333,7 +333,7 @@ export const TeamWorkloadViewStyles = `
   .summary-value {
     font-size: 28px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--primary);
   }
   .summary-label {
     font-size: 12px;
@@ -404,7 +404,7 @@ export const TeamWorkloadViewStyles = `
   }
   .person-load-fill {
     height: 100%;
-    background: var(--accent);
+    background: var(--primary);
     border-radius: 2px;
     transition: width 0.3s ease;
   }
@@ -495,7 +495,7 @@ export const TeamWorkloadViewStyles = `
   }
   .popup-issue-key {
     font-weight: 600;
-    color: var(--accent);
+    color: var(--primary);
     text-decoration: none;
     white-space: nowrap;
   }

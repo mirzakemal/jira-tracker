@@ -749,7 +749,7 @@ export const TableViewStyles = `
 
   .issue-key {
     font-weight: 600;
-    color: var(--accent);
+    color: var(--primary);
     white-space: nowrap;
   }
 
@@ -811,8 +811,8 @@ export const TableViewStyles = `
     display: inline-flex;
     align-items: center;
     padding: 2px 8px;
-    background: var(--accent-bg);
-    color: var(--accent);
+    background: var(--primary-bg);
+    color: var(--primary);
     border-radius: 12px;
     font-size: 11px;
     font-weight: 500;

@@ -1,5 +1,6 @@
 import './style.css'
 import logger from './utils/logger.js';
+import { escapeHtml } from './utils/html.js';
 import { SettingsPanel } from './components/SettingsPanel.js'
 import { BoardSelector } from './components/BoardSelector.js'
 import { IssueBoard } from './components/IssueBoard.js'
@@ -400,183 +401,165 @@ async function renderDisconnected(savedUser = null) {
  * Render connected state (full app)
  */
 async function renderConnected(user, initialView = 'board', filters = {}) {
-  // Set the initial view state before rendering
   state.currentView = initialView
 
-  // Render different HTML based on initial view to avoid flash
-  if (initialView === 'all-issues') {
-    // Render All Issues view immediately
-    appElement.innerHTML = `
-      <div class="app-container">
-        <div class="app-header">
-          <div>
-            <h1 class="app-title">📋 Jira Planner</h1>
-            <p style="margin: 5px 0 0; font-size: 14px; color: var(--text-secondary);">
-              Connected as ${user.displayName}
-            </p>
+  // Single unified layout: sidebar + main content
+  appElement.innerHTML = `
+    <div class="app-container">
+      <div class="app-sidebar" id="app-sidebar">
+        <div class="sidebar-brand">
+          <span class="sidebar-brand-icon">📋</span>
+          <span class="sidebar-brand-text">Jira Planner</span>
+        </div>
+        <div class="sidebar-nav" id="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Views</div>
+            <button class="nav-item" data-view="board" id="nav-board">
+              <span class="nav-item-icon">📋</span>
+              <span class="nav-item-label">Board</span>
+            </button>
+            <button class="nav-item" data-view="all-issues" id="nav-all-issues">
+              <span class="nav-item-icon">📄</span>
+              <span class="nav-item-label">All Issues</span>
+            </button>
+            <button class="nav-item" data-view="roadmap" id="nav-roadmap">
+              <span class="nav-item-icon">🗺️</span>
+              <span class="nav-item-label">Roadmap</span>
+            </button>
           </div>
-          <div class="header-actions">
-            <div class="view-toggle">
-              <button class="toggle-btn" id="board-view-btn">
-                Kanban Board
-              </button>
-              <button class="toggle-btn" id="all-issues-view-btn">
-                All Issues
-              </button>
-              <button class="toggle-btn ${initialView === 'roadmap' ? 'active' : ''}" id="roadmap-view-btn">
-                Roadmap
-              </button>
-              <button class="toggle-btn ${initialView === 'velocity' ? 'active' : ''}" id="velocity-view-btn">
-                Velocity
-              </button>
-              <button class="toggle-btn ${initialView === 'workload' ? 'active' : ''}" id="workload-view-btn">
-                Team
-              </button>
-              <button class="toggle-btn ${initialView === 'aging' ? 'active' : ''}" id="aging-view-btn">
-                Aging
-              </button>
-              <button class="toggle-btn ${initialView === 'releases' ? 'active' : ''}" id="releases-view-btn">
-                Releases
-              </button>
-              <button class="toggle-btn ${initialView === 'dashboard' ? 'active' : ''}" id="dashboard-view-btn">
-                Dashboard
-              </button>
-            </div>
-            <div id="sync-status-container"></div>
+          <div class="nav-section">
+            <div class="nav-section-title">Analytics</div>
+            <button class="nav-item" data-view="dashboard" id="nav-dashboard">
+              <span class="nav-item-icon">📊</span>
+              <span class="nav-item-label">Dashboard</span>
+            </button>
+            <button class="nav-item" data-view="velocity" id="nav-velocity">
+              <span class="nav-item-icon">⚡</span>
+              <span class="nav-item-label">Velocity</span>
+            </button>
+            <button class="nav-item" data-view="workload" id="nav-workload">
+              <span class="nav-item-icon">👥</span>
+              <span class="nav-item-label">Team</span>
+            </button>
+            <button class="nav-item" data-view="aging" id="nav-aging">
+              <span class="nav-item-icon">⏳</span>
+              <span class="nav-item-label">Aging</span>
+            </button>
+            <button class="nav-item" data-view="releases" id="nav-releases">
+              <span class="nav-item-icon">🚀</span>
+              <span class="nav-item-label">Releases</span>
+            </button>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          <div id="sync-status-container"></div>
+          <button class="sidebar-collapse-btn" id="sidebar-collapse-btn">
+            <span>◀</span>
+            <span class="nav-item-label">Collapse</span>
+          </button>
+        </div>
+      </div>
+      <div class="app-main">
+        <div class="top-bar">
+          <div class="top-bar-left">
+            <span class="user-greeting">
+              Connected as <strong>${escapeHtml(user.displayName)}</strong>
+            </span>
+          </div>
+          <div class="top-bar-right">
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
               🔄 Refresh
             </button>
           </div>
         </div>
-        <div id="issue-board-container"></div>
+        <div class="app-content" id="app-content">
+          <div id="board-selector-container"></div>
+          <div id="issue-board-container"></div>
+        </div>
       </div>
-    `
+    </div>
+  `
 
-    // Add global styles
-    addGlobalStyles()
+  // Add global styles
+  addGlobalStyles()
 
-    // Bind toolbar events immediately
-    document.getElementById('refresh-btn')?.addEventListener('click', loadIssues)
-    document.getElementById('board-view-btn')?.addEventListener('click', switchToBoardView)
-    document.getElementById('all-issues-view-btn')?.addEventListener('click', switchToAllIssuesView)
-    document.getElementById('roadmap-view-btn')?.addEventListener('click', () => switchToRoadmapView())
-    document.getElementById('velocity-view-btn')?.addEventListener('click', () => switchToSprintVelocityView())
-    document.getElementById('workload-view-btn')?.addEventListener('click', () => switchToWorkloadView())
-    document.getElementById('aging-view-btn')?.addEventListener('click', () => switchToAgingView())
-    document.getElementById('releases-view-btn')?.addEventListener('click', () => switchToReleasesView())
-    document.getElementById('dashboard-view-btn')?.addEventListener('click', () => switchToDashboardView())
+  // Set the active nav item
+  highlightNavItem(initialView)
 
-    // Render All Issues view BEFORE awaiting anything
-    const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
-    const container = document.getElementById('issue-board-container')
-    if (container) {
-      container.innerHTML = allIssuesView.render()
-      allIssuesView.loadIssues(filters).catch(err => logger.error('[AllIssues] loadIssues failed:', err))
+  // Bind sidebar collapse button
+  let collapsed = false
+  document.getElementById('sidebar-collapse-btn')?.addEventListener('click', () => {
+    collapsed = !collapsed
+    const sidebar = document.getElementById('app-sidebar')
+    const btn = document.getElementById('sidebar-collapse-btn')
+    sidebar?.classList.toggle('collapsed', collapsed)
+    if (btn) {
+      btn.innerHTML = collapsed
+        ? '<span>▶</span>'
+        : '<span>◀</span><span class="nav-item-label">Collapse</span>'
     }
+  })
 
-    // Initialize sync status in background (non-blocking)
-    renderSyncStatus().catch(() => {})
+  // Bind navigation through a single listener on the nav container
+  const sidebarNav = document.getElementById('sidebar-nav')
+  sidebarNav?.addEventListener('click', (e) => {
+    const navItem = e.target.closest('.nav-item')
+    if (!navItem) return
+    const view = navItem.dataset.view
+    const viewSwitchMap = {
+      board: switchToBoardView,
+      'all-issues': switchToAllIssuesView,
+      roadmap: () => switchToRoadmapView(),
+      velocity: () => switchToSprintVelocityView(),
+      workload: () => switchToWorkloadView(),
+      aging: () => switchToAgingView(),
+      releases: () => switchToReleasesView(),
+      dashboard: () => switchToDashboardView()
+    }
+    const handler = viewSwitchMap[view]
+    if (handler) handler()
+  })
 
-    // Load board selector in background for later use
-    const boardSelector = new BoardSelector(handleSelectionChange)
-    boardSelector.load(state.client).catch(err => logger.error('[BoardSelector] load failed:', err))
-  } else {
-    // Render Board view
-    appElement.innerHTML = `
-      <div class="app-container">
-        <div class="app-header">
-          <div>
-            <h1 class="app-title">📋 Jira Planner</h1>
-            <p style="margin: 5px 0 0; font-size: 14px; color: var(--text-secondary);">
-              Connected as ${user.displayName}
-            </p>
-          </div>
-          <div class="header-actions">
-            <div class="view-toggle">
-              <button class="toggle-btn active" id="board-view-btn">
-                Kanban Board
-              </button>
-              <button class="toggle-btn" id="all-issues-view-btn">
-                All Issues
-              </button>
-              <button class="toggle-btn" id="roadmap-view-btn">
-                Roadmap
-              </button>
-              <button class="toggle-btn" id="velocity-view-btn">
-                Velocity
-              </button>
-              <button class="toggle-btn" id="workload-view-btn">
-                Team
-              </button>
-              <button class="toggle-btn" id="aging-view-btn">
-                Aging
-              </button>
-              <button class="toggle-btn" id="releases-view-btn">
-                Releases
-              </button>
-              <button class="toggle-btn" id="dashboard-view-btn">
-                Dashboard
-              </button>
-            </div>
-            <div id="sync-status-container"></div>
-            <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
-              🔄 Refresh
-            </button>
-          </div>
-        </div>
+  // Bind refresh
+  document.getElementById('refresh-btn')?.addEventListener('click', loadIssues)
 
-        <div id="board-selector-container"></div>
-        <div id="issue-board-container"></div>
-      </div>
-    `
+  // Initialize sync status in background
+  renderSyncStatus().catch(() => {})
 
-    // Add global styles
-    addGlobalStyles()
+  // Initialize board selector (always, but only visible on board view)
+  const boardSelector = new BoardSelector(handleSelectionChange)
+  const selectorContainer = document.getElementById('board-selector-container')
 
-    // Bind toolbar events
-    document.getElementById('refresh-btn')?.addEventListener('click', loadIssues)
-    document.getElementById('board-view-btn')?.addEventListener('click', switchToBoardView)
-    document.getElementById('all-issues-view-btn')?.addEventListener('click', switchToAllIssuesView)
-    document.getElementById('roadmap-view-btn')?.addEventListener('click', () => switchToRoadmapView())
-    document.getElementById('velocity-view-btn')?.addEventListener('click', () => switchToSprintVelocityView())
-    document.getElementById('workload-view-btn')?.addEventListener('click', () => switchToWorkloadView())
-    document.getElementById('aging-view-btn')?.addEventListener('click', () => switchToAgingView())
-    document.getElementById('releases-view-btn')?.addEventListener('click', () => switchToReleasesView())
-    document.getElementById('dashboard-view-btn')?.addEventListener('click', () => switchToDashboardView())
-
-    // Initialize sync status in background
-    renderSyncStatus().catch(() => {})
-
-    // Initialize board selector for board view
-    const boardSelector = new BoardSelector(handleSelectionChange)
-    const selectorContainer = document.getElementById('board-selector-container')
+  if (initialView === 'board') {
     selectorContainer.innerHTML = boardSelector.render()
-
-    // Load projects and boards
     boardSelector.load(state.client).then(() => {
       selectorContainer.innerHTML = boardSelector.render()
       boardSelector.bindEvents(state.client)
-
-      // Restore saved selection if available
       const savedSelection = loadSelection()
       if (savedSelection && state.board) {
         const savedBoard = boardSelector.boards.find(b => b.id === savedSelection.boardId)
         if (savedBoard) {
           boardSelector.selectedBoard = savedBoard.id
           const savedSprint = boardSelector.sprints.find(s => s.id === savedSelection.sprintId)
-          if (savedSprint) {
-            boardSelector.selectedSprint = savedSprint.id
-          }
+          if (savedSprint) boardSelector.selectedSprint = savedSprint.id
           boardSelector.refresh(state.client)
         }
       }
-
-      // Load initial issues
       loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
-
-      // Auto-sync data in background
       autoSync()
     }).catch(err => logger.error('[BoardSelector] load failed:', err))
+  } else {
+    boardSelector.load(state.client).catch(err => logger.error('[BoardSelector] load failed:', err))
+  }
+
+  // Render initial view content
+  if (initialView === 'all-issues') {
+    const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
+    const container = document.getElementById('issue-board-container')
+    if (container) {
+      container.innerHTML = allIssuesView.render()
+      allIssuesView.loadIssues(filters).catch(err => logger.error('[AllIssues] loadIssues failed:', err))
+    }
   }
 }
 
@@ -819,46 +802,32 @@ function addGlobalStyles() {
       font-weight: 600;
     }
 
-    .header-actions {
-      display: flex;
+    .refresh-btn {
+      display: inline-flex;
       align-items: center;
-      gap: 12px;
-    }
-
-    .view-toggle {
-      display: flex;
-      flex-wrap: wrap;
+      gap: 6px;
+      padding: 7px 14px;
+      border: 1px solid var(--border);
       background: var(--surface);
-      border-radius: 8px;
-      padding: 4px;
-      box-shadow: var(--shadow);
-    }
-
-    .toggle-btn {
-      padding: 8px 16px;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s ease;
-    }
-
-    .toggle-btn:hover {
-      background: var(--hover);
       color: var(--text);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.12s ease;
     }
 
-    .toggle-btn.active {
-      background: var(--accent);
-      color: white;
+    .refresh-btn:hover {
+      background: var(--hover);
+      border-color: var(--primary-border);
     }
 
-    .app-header {
-      flex-wrap: wrap;
-      gap: 16px;
+    .board-selector {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-md) var(--space-lg);
+      margin-bottom: var(--space-lg);
     }
 
     .loading-board {
@@ -874,7 +843,7 @@ function addGlobalStyles() {
       width: 40px;
       height: 40px;
       border: 3px solid var(--border);
-      border-top-color: var(--accent);
+      border-top-color: var(--primary);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -1308,22 +1277,14 @@ async function switchToDashboardView() {
 /**
  * Update view toggle buttons
  */
-function updateViewToggle() {
-  const boardBtn = document.getElementById('board-view-btn')
-  const allIssuesBtn = document.getElementById('all-issues-view-btn')
-  const roadmapBtn = document.getElementById('roadmap-view-btn')
-  const velocityBtn = document.getElementById('velocity-view-btn')
-  const workloadBtn = document.getElementById('workload-view-btn')
-  const agingBtn = document.getElementById('aging-view-btn')
-  const releasesBtn = document.getElementById('releases-view-btn')
-  const dashboardBtn = document.getElementById('dashboard-view-btn')
+function highlightNavItem(view) {
+  const sidebarNav = document.getElementById('sidebar-nav')
+  if (!sidebarNav) return
+  sidebarNav.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.view === view)
+  })
+}
 
-  if (boardBtn) boardBtn.classList.toggle('active', state.currentView === 'board')
-  if (allIssuesBtn) allIssuesBtn.classList.toggle('active', state.currentView === 'all-issues')
-  if (roadmapBtn) roadmapBtn.classList.toggle('active', state.currentView === 'roadmap')
-  if (velocityBtn) velocityBtn.classList.toggle('active', state.currentView === 'velocity')
-  if (workloadBtn) workloadBtn.classList.toggle('active', state.currentView === 'workload')
-  if (agingBtn) agingBtn.classList.toggle('active', state.currentView === 'aging')
-  if (releasesBtn) releasesBtn.classList.toggle('active', state.currentView === 'releases')
-  if (dashboardBtn) dashboardBtn.classList.toggle('active', state.currentView === 'dashboard')
+function updateViewToggle() {
+  highlightNavItem(state.currentView)
 }

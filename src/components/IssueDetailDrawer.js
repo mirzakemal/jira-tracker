@@ -413,7 +413,7 @@ export const IssueDetailDrawerStyles = `
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
-    background: var(--accent, #4f8cff);
+    background: var(--primary, #6366f1);
     color: white;
   }
   .drawer-title .issue-key {
@@ -526,7 +526,7 @@ export const IssueDetailDrawerStyles = `
     margin: 8px 0;
   }
   .issue-description blockquote {
-    border-left: 3px solid var(--accent, #4f8cff);
+    border-left: 3px solid var(--primary, #6366f1);
     margin: 8px 0;
     padding: 4px 12px;
     color: var(--text-secondary, #aaa);
@@ -555,7 +555,7 @@ export const IssueDetailDrawerStyles = `
   }
   .subtask-key, .linked-issue-key {
     font-weight: 600;
-    color: var(--accent, #4f8cff);
+    color: var(--primary, #6366f1);
     text-decoration: none;
     cursor: pointer;
   }
@@ -577,7 +577,7 @@ export const IssueDetailDrawerStyles = `
   }
   .link-type.outward {
     background: rgba(79, 140, 255, 0.15);
-    color: var(--accent, #4f8cff);
+    color: var(--primary, #6366f1);
   }
   .link-type.inward {
     background: rgba(255, 165, 0, 0.15);
@@ -629,11 +629,11 @@ export const IssueDetailDrawerStyles = `
     font-size: 13px;
   }
   .mention {
-    color: var(--accent, #4f8cff);
+    color: var(--primary, #6366f1);
     font-weight: 500;
   }
   .inline-card {
-    color: var(--accent, #4f8cff);
+    color: var(--primary, #6366f1);
   }
   .media-placeholder {
     color: var(--text-secondary, #888);

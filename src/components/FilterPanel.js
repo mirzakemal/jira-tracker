@@ -540,7 +540,7 @@ export const FilterPanelStyles = `
   }
 
   .filter-active-count {
-    background: var(--accent);
+    background: var(--primary);
     color: #fff;
     border-radius: 10px;
     padding: 1px 7px;
@@ -573,7 +573,7 @@ export const FilterPanelStyles = `
 
   .filter-search-input:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .filter-search-bar .clear-field-btn {
@@ -610,7 +610,7 @@ export const FilterPanelStyles = `
     width: 100%;
     padding: 10px 12px;
     border: none;
-    background: var(--code-bg);
+    background: var(--border-light);
     color: var(--text-h);
     font-size: 13px;
     font-weight: 600;
@@ -678,7 +678,7 @@ export const FilterPanelStyles = `
   .filter-select:focus,
   .filter-input:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .clear-field-btn {
@@ -719,11 +719,11 @@ export const FilterPanelStyles = `
   }
 
   .multi-select-trigger:hover {
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .multi-select-count {
-    background: var(--accent);
+    background: var(--primary);
     color: #fff;
     border-radius: 8px;
     padding: 0 5px;
@@ -779,7 +779,7 @@ export const FilterPanelStyles = `
     padding: 4px 8px;
     border: 1px solid var(--border);
     border-radius: 4px;
-    background: var(--code-bg);
+    background: var(--border-light);
     color: var(--text-secondary);
     font-size: 11px;
     cursor: pointer;
@@ -809,7 +809,7 @@ export const FilterPanelStyles = `
 
   .dropdown-search-input:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .dropdown-options {
@@ -833,11 +833,11 @@ export const FilterPanelStyles = `
   }
 
   .dropdown-option.checked {
-    background: var(--accent-bg);
+    background: var(--primary-bg);
   }
 
   .dropdown-option input[type="checkbox"] {
-    accent-color: var(--accent);
+    accent-color: var(--primary);
     flex-shrink: 0;
   }
 

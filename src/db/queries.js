@@ -758,6 +758,35 @@ export async function deleteView(id) {
 // ==================== Roadmap Queries ====================
 
 /**
+ * Apply filters to an issue (shared between date-range and sprint-based paths)
+ */
+function applyRoadmapFilters(issue, filters) {
+  if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
+  if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
+  if (filters.fixVersion && Array.isArray(filters.fixVersion) && filters.fixVersion.length > 0) {
+    if (!filters.fixVersion.includes(issue.fix_version)) return false;
+  }
+  if (filters.customer && Array.isArray(filters.customer) && filters.customer.length > 0) {
+    const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
+    if (!filters.customer.some(c => issueCustomers.includes(c))) return false;
+  }
+  if (filters.product && Array.isArray(filters.product) && filters.product.length > 0) {
+    if (!filters.product.includes(issue.product)) return false;
+  }
+  if (filters.assigneeId && Array.isArray(filters.assigneeId) && filters.assigneeId.length > 0) {
+    if (!filters.assigneeId.includes(issue.assignee_id)) return false;
+  }
+  if (filters.tag && Array.isArray(filters.tag) && filters.tag.length > 0) {
+    const issueTags = filters.issueTags?.[issue.key] || [];
+    if (!filters.tag.some(t => issueTags.includes(t))) return false;
+  } else if (filters.tag && !Array.isArray(filters.tag)) {
+    const issueTags = filters.issueTags?.[issue.key] || [];
+    if (!issueTags.includes(filters.tag)) return false;
+  }
+  return true;
+}
+
+/**
  * Get issues for roadmap view with date range filtering
  */
 export async function getRoadmapIssues(filters = {}) {
@@ -773,7 +802,7 @@ export async function getRoadmapIssues(filters = {}) {
     : today;
   const endDate = filters.endDate
     ? new Date(filters.endDate)
-    : new Date(today.setMonth(today.getMonth() + 3));
+    : new Date(new Date(today).setMonth(today.getMonth() + 3));
 
   // Filter issues that have dates within range
   const filteredIssues = issues.filter(issue => {
@@ -787,62 +816,13 @@ export async function getRoadmapIssues(filters = {}) {
     const hasDueInRange = issueDue && issueDue >= startDate && issueDue <= endDate;
     const hasEndInRange = issueEnd && issueEnd >= startDate && issueEnd <= endDate;
 
-    // Include issue if any date field is in range
-    if (hasStartInRange || hasDueInRange || hasEndInRange) {
-      // Apply other filters
-      if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
-      if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
-      if (filters.fixVersion && Array.isArray(filters.fixVersion) && filters.fixVersion.length > 0) {
-        if (!filters.fixVersion.includes(issue.fix_version)) return false;
-      }
-      if (filters.customer && Array.isArray(filters.customer) && filters.customer.length > 0) {
-        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
-        if (!filters.customer.some(c => issueCustomers.includes(c))) return false;
-      }
-      if (filters.product && Array.isArray(filters.product) && filters.product.length > 0) {
-        if (!filters.product.includes(issue.product)) return false;
-      }
-      if (filters.assigneeId && Array.isArray(filters.assigneeId) && filters.assigneeId.length > 0) {
-        if (!filters.assigneeId.includes(issue.assignee_id)) return false;
-      }
-      if (filters.tag && Array.isArray(filters.tag) && filters.tag.length > 0) {
-        const issueTags = filters.issueTags?.[issue.key] || [];
-        if (!filters.tag.some(t => issueTags.includes(t))) return false;
-      } else if (filters.tag && !Array.isArray(filters.tag)) {
-        const issueTags = filters.issueTags?.[issue.key] || [];
-        if (!issueTags.includes(filters.tag)) return false;
-      }
-      return true;
-    }
+    // Include issue if any date field is in range, or if it has a sprint_id
+    const inDateRange = hasStartInRange || hasDueInRange || hasEndInRange;
+    const hasSprint = !!issue.sprint_id;
 
-    // Also include issues with sprint_id (to show issues in sprints)
-    if (issue.sprint_id) {
-      if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
-      if (filters.status && filters.status.length > 0 && !filters.status.includes(issue.status)) return false;
-      if (filters.fixVersion && Array.isArray(filters.fixVersion) && filters.fixVersion.length > 0) {
-        if (!filters.fixVersion.includes(issue.fix_version)) return false;
-      }
-      if (filters.customer && Array.isArray(filters.customer) && filters.customer.length > 0) {
-        const issueCustomers = issue.customer?.split(',').map(c => c.trim()) || [];
-        if (!filters.customer.some(c => issueCustomers.includes(c))) return false;
-      }
-      if (filters.product && Array.isArray(filters.product) && filters.product.length > 0) {
-        if (!filters.product.includes(issue.product)) return false;
-      }
-      if (filters.assigneeId && Array.isArray(filters.assigneeId) && filters.assigneeId.length > 0) {
-        if (!filters.assigneeId.includes(issue.assignee_id)) return false;
-      }
-      if (filters.tag && Array.isArray(filters.tag) && filters.tag.length > 0) {
-        const issueTags = filters.issueTags?.[issue.key] || [];
-        if (!filters.tag.some(t => issueTags.includes(t))) return false;
-      } else if (filters.tag && !Array.isArray(filters.tag)) {
-        const issueTags = filters.issueTags?.[issue.key] || [];
-        if (!issueTags.includes(filters.tag)) return false;
-      }
-      return true;
-    }
+    if (!inDateRange && !hasSprint) return false;
 
-    return false;
+    return applyRoadmapFilters(issue, filters);
   });
 
   // Load users for enrichment (fallback if assignee_name not stored)
@@ -930,7 +910,7 @@ export async function getSprintsInDateRange(startDate, endDate) {
   const sprints = await getAll(STORES.SPRINTS);
 
   const start = startDate ? new Date(startDate) : new Date();
-  const end = endDate ? new Date(endDate) : new Date(start.setMonth(start.getMonth() + 3));
+  const end = endDate ? new Date(endDate) : new Date(new Date(start).setMonth(start.getMonth() + 3));
 
   return sprints.filter(sprint => {
     const sprintStart = sprint.start_date ? new Date(sprint.start_date) : null;
@@ -949,19 +929,39 @@ export async function getSprintsInDateRange(startDate, endDate) {
 }
 
 /**
+ * Get issues that have no date fields (unscheduled), filtered by project.
+ */
+export async function getUnscheduledIssues(filters = {}) {
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+
+  return issues.filter(issue => {
+    const hasDates = issue.start_date || issue.due_date || issue.resolved_at || issue.sprint_id;
+    if (hasDates) return false;
+    if (filters.projectKey && issue.project_key !== filters.projectKey) return false;
+    return true;
+  }).sort((a, b) => {
+    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bCreated - aCreated;
+  });
+}
+
+/**
  * Get issues grouped by parent/epic for roadmap swimlanes
  */
 export async function getRoadmapData(filters = {}) {
-  const issues = await getRoadmapIssues(filters);
-  const sprints = await getSprintsInDateRange(filters.startDate, filters.endDate);
+  const [issues, sprints, unscheduled, epics] = await Promise.all([
+    getRoadmapIssues(filters),
+    getSprintsInDateRange(filters.startDate, filters.endDate),
+    getUnscheduledIssues(filters),
+    getEpicsOrThemes(filters.projectKey)
+  ]);
 
   // Determine grouping strategy based on filters and data availability
   const groupBy = filters.groupBy || 'epic';
   let groups = [];
   let issuesByGroup = {};
-
-  // Get epics/parents if needed
-  const epics = await getEpicsOrThemes(filters.projectKey);
 
   switch (groupBy) {
     case 'epic':
@@ -1108,6 +1108,7 @@ export async function getRoadmapData(filters = {}) {
     epics: groups,
     sprints,
     issues,
+    unscheduled,
     groupedData,
     groupBy
   };

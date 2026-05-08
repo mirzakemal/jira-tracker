@@ -23,7 +23,9 @@ export class RoadmapView {
       startDate: this.getDefaultStartDate(),
       endDate: this.getDefaultEndDate(),
       groupBy: 'epic',
-      zoomLevel: 'week'
+      zoomLevel: 'week',
+      colorMode: 'epic',
+      compact: false
     };
     this.isLoading = false;
     this.error = null;
@@ -70,11 +72,9 @@ export class RoadmapView {
 
       // Update URL with current filters
       this.updateUrlFilters();
-
-      // Store reference globally for router
-      window.currentRoadmapView = this;
     } catch (error) {
       logger.error('[RoadmapView] Failed to load roadmap:', error);
+      this.error = error.message || 'Failed to load roadmap';
       this.isLoading = false;
       this.refresh();
     }
@@ -109,19 +109,69 @@ export class RoadmapView {
   }
 
   /**
+   * Get summary stats for the stats bar
+   */
+  getStats() {
+    if (!this.roadmapData) return null;
+    const { groupedData, sprints, issues, unscheduled } = this.roadmapData;
+    const totalIssues = issues.length;
+    const totalSprints = sprints.length;
+    const totalGroups = groupedData.length;
+    const unscheduledCount = unscheduled?.length || 0;
+    const doneCount = issues.filter(i => {
+      const s = (i.status || '').toLowerCase();
+      return s.includes('done') || s.includes('closed') || s.includes('resolved');
+    }).length;
+    const progressPct = totalIssues > 0 ? Math.round((doneCount / totalIssues) * 100) : 0;
+    return { totalIssues, totalSprints, totalGroups, unscheduledCount, doneCount, progressPct };
+  }
+
+  /**
    * Render the view
    */
   render() {
     if (this.error) return this.renderError();
 
+    const stats = this.getStats();
+    const dateRangeLabel = this.filters.startDate && this.filters.endDate
+      ? `${this.filters.startDate} → ${this.filters.endDate}`
+      : '';
+
     return `
       <div class="roadmap-view" id="roadmap-view">
-        <div class="view-header">
-          <div class="view-header-left">
-            <button class="back-btn" id="back-btn" title="Back to board">
-              ← Back to Board
-            </button>
-            <h2>Roadmap</h2>
+        <div class="roadmap-header">
+          <div class="roadmap-header-left">
+            <button class="back-btn" id="back-btn" title="Back to board">← Back</button>
+            <h2 class="roadmap-title">Roadmap</h2>
+            ${dateRangeLabel ? `<span class="roadmap-date-range">${dateRangeLabel}</span>` : ''}
+          </div>
+          <div class="roadmap-header-right">
+            ${stats ? `
+              <div class="roadmap-stats">
+                <div class="stat-pill">
+                  <span class="stat-pill-value">${stats.totalIssues}</span>
+                  <span class="stat-pill-label">Issues</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="stat-pill-value">${stats.doneCount}</span>
+                  <span class="stat-pill-label">Done</span>
+                </div>
+                <div class="stat-pill stat-pill-progress">
+                  <span class="stat-pill-value">${stats.progressPct}%</span>
+                  <span class="stat-pill-label">Progress</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="stat-pill-value">${stats.totalSprints}</span>
+                  <span class="stat-pill-label">Sprints</span>
+                </div>
+                ${stats.unscheduledCount > 0 ? `
+                  <div class="stat-pill stat-pill-warn">
+                    <span class="stat-pill-value">${stats.unscheduledCount}</span>
+                    <span class="stat-pill-label">Unscheduled</span>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
           </div>
         </div>
 
@@ -172,7 +222,8 @@ export class RoadmapView {
       const timeline = new RoadmapTimeline(
         this.roadmapData,
         this.filters,
-        (issueKey) => this.openIssue(issueKey)
+        (issueKey) => this.openIssue(issueKey),
+        (newFilters) => this.handleFilterChange(newFilters)
       );
       timelineContainer.innerHTML = timeline.render();
       timeline.bindEvents();
@@ -190,7 +241,7 @@ export class RoadmapView {
       }
     });
     const retryBtn = document.getElementById('retry-load-btn');
-    retryBtn?.addEventListener('click', () => this.load());
+    retryBtn?.addEventListener('click', () => this.loadRoadmap());
   }
 
   renderError() {
@@ -212,6 +263,77 @@ export const RoadmapViewStyles = `
   .roadmap-view {
     max-width: 100%;
     margin: 0 auto;
+  }
+
+  /* Compact header */
+  .roadmap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--surface, #1e1e36);
+    border-bottom: 1px solid var(--border, #333);
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .roadmap-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .roadmap-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text, #e0e0e0);
+    white-space: nowrap;
+  }
+  .roadmap-date-range {
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+    background: var(--hover, #2a2a44);
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+  .roadmap-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Stats pills */
+  .roadmap-stats {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--hover, #2a2a44);
+    border-radius: 16px;
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+  }
+  .stat-pill-value {
+    font-weight: 700;
+    color: var(--text, #e0e0e0);
+  }
+  .stat-pill-label {
+    font-size: 11px;
+  }
+  .stat-pill-progress .stat-pill-value {
+    color: var(--accent, #4f8cff);
+  }
+  .stat-pill-warn {
+    background: rgba(251, 191, 36, 0.15);
+  }
+  .stat-pill-warn .stat-pill-value {
+    color: #fbbf24;
   }
 
   ${RoadmapToolbarStyles}

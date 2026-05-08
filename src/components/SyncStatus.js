@@ -127,7 +127,7 @@ export const SyncStatusStyles = `
     gap: 6px;
     padding: 8px 16px;
     border: none;
-    background: var(--accent);
+    background: var(--primary);
     color: white;
     border-radius: 6px;
     cursor: pointer;
@@ -137,7 +137,7 @@ export const SyncStatusStyles = `
   }
 
   .sync-button:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--primary-hover);
     transform: translateY(-1px);
     box-shadow: var(--shadow);
   }
@@ -175,9 +175,9 @@ export const SyncStatusStyles = `
 
   .sync-changes-badge {
     padding: 4px 12px;
-    background: color-mix(in srgb, var(--accent, #64ffda) 12%, transparent);
-    color: var(--accent, #64ffda);
-    border: 1px solid var(--accent, #64ffda);
+    background: color-mix(in srgb, var(--primary, #6366f1) 12%, transparent);
+    color: var(--primary, #6366f1);
+    border: 1px solid var(--primary, #6366f1);
     border-radius: 12px;
     font-size: 12px;
     font-weight: 500;
@@ -186,7 +186,7 @@ export const SyncStatusStyles = `
   }
 
   .sync-changes-badge:hover {
-    background: color-mix(in srgb, var(--accent, #64ffda) 20%, transparent);
+    background: color-mix(in srgb, var(--primary, #6366f1) 20%, transparent);
     transform: translateY(-1px);
   }
 `;

@@ -55,7 +55,8 @@ export class SprintVelocityView {
     }
 
     const { sprints, summary } = this.data;
-    const maxTotal = Math.max(...sprints.map(s => s.total), 1);
+    const recentSprints = sprints.slice(-5);
+    const maxTotal = Math.max(...recentSprints.map(s => s.total), 1);
 
     return `
       <div class="velocity-dashboard" id="velocity-dashboard-container">
@@ -95,7 +96,7 @@ export class SprintVelocityView {
         <div class="velocity-chart">
           <h3>Completion Trend</h3>
           <div class="bar-chart">
-            ${sprints.map(sprint => {
+            ${recentSprints.map(sprint => {
               const totalPct = Math.max(Math.round((sprint.total / maxTotal) * 100), 4);
               return `
                 <div class="bar-row ${this.animate ? 'bar-animate' : ''}">
@@ -408,7 +409,7 @@ export const SprintVelocityViewStyles = `
   .summary-value {
     font-size: 28px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--primary);
     line-height: 1.2;
   }
 
@@ -421,6 +422,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .velocity-chart {
+    margin-top: 32px;
     margin-bottom: 32px;
   }
 
@@ -435,6 +437,7 @@ export const SprintVelocityViewStyles = `
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 16px;
+    overflow: hidden;
   }
 
   .bar-row {
@@ -450,8 +453,8 @@ export const SprintVelocityViewStyles = `
   }
 
   .bar-label {
-    width: 180px;
-    min-width: 180px;
+    width: 140px;
+    min-width: 140px;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -473,7 +476,7 @@ export const SprintVelocityViewStyles = `
   .bar-track {
     flex: 1;
     height: 24px;
-    background: var(--hover);
+    background: var(--bg);
     border-radius: 4px;
     position: relative;
     overflow: hidden;
@@ -488,27 +491,16 @@ export const SprintVelocityViewStyles = `
     display: flex;
     align-items: center;
     padding-left: 8px;
-    transition: width 0.6s ease;
-  }
-
-  .bar-animate .bar-fill {
-    animation: barGrow 0.6s ease-out forwards;
-  }
-
-  @keyframes barGrow {
-    from { width: 0; }
-    to { width: var(--bar-width); }
+    width: var(--bar-width, 0%);
   }
 
   .bar-total {
-    width: var(--bar-width);
-    background: var(--hover);
+    background: var(--border);
     z-index: 1;
   }
 
   .bar-completed {
-    width: var(--bar-width);
-    background: var(--accent);
+    background: var(--primary);
     opacity: 0.75;
     z-index: 2;
   }
@@ -558,12 +550,12 @@ export const SprintVelocityViewStyles = `
   }
 
   .legend-done {
-    background: var(--accent);
+    background: var(--primary);
     opacity: 0.75;
   }
 
   .legend-remain {
-    background: var(--hover);
+    background: var(--border);
   }
 
   .velocity-sprints h3 {
@@ -587,7 +579,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .sprint-card:hover {
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
 
   .sprint-card-header {
@@ -618,7 +610,7 @@ export const SprintVelocityViewStyles = `
   .stat-value {
     font-size: 18px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--primary);
   }
 
   .stat-label {
@@ -668,7 +660,7 @@ export const SprintVelocityViewStyles = `
     left: 0;
     height: 100%;
     width: var(--width);
-    background: var(--accent);
+    background: var(--primary);
     border-radius: 3px;
   }
 
@@ -718,8 +710,8 @@ export const SprintVelocityViewStyles = `
   }
 
   .burndown-toggle:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--primary);
+    color: var(--primary);
   }
 
   .burndown-chart {
@@ -784,13 +776,13 @@ export const SprintVelocityViewStyles = `
   }
 
   .burndown-actual {
-    stroke: var(--accent, #64ffda);
+    stroke: var(--primary, #6366f1);
     stroke-linecap: round;
     stroke-linejoin: round;
   }
 
   .burndown-dot {
-    fill: var(--accent, #64ffda);
+    fill: var(--primary, #6366f1);
   }
 
   .burndown-legend {
@@ -810,7 +802,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .burndown-legend-actual {
-    color: var(--accent, #64ffda);
+    color: var(--primary, #6366f1);
     font-weight: 500;
   }
 `;

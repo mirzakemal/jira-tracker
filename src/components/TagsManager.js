@@ -36,7 +36,7 @@ export const TagsManagerStyles = `
     width: 24px;
     height: 24px;
     border: none;
-    background: var(--accent);
+    background: var(--primary);
     color: white;
     border-radius: 4px;
     cursor: pointer;
@@ -46,7 +46,7 @@ export const TagsManagerStyles = `
   }
 
   .tag-add-btn:hover {
-    background: var(--accent-hover);
+    background: var(--primary-hover);
     transform: scale(1.1);
   }
 
