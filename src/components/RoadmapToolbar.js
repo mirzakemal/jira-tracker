@@ -3,6 +3,8 @@
  * Provides date range selection, grouping options, and zoom controls
  */
 
+import { escapeHtml } from '../utils/html.js';
+
 export class RoadmapToolbar {
   constructor(filters, onFilterChange, projects = []) {
     this.filters = filters || {
@@ -44,8 +46,8 @@ export class RoadmapToolbar {
             <select id="roadmap-project" class="toolbar-select">
               <option value="">All Projects</option>
               ${this.projects.map(p => `
-                <option value="${this.escapeHtml(p.key)}" ${this.filters.projectKey === p.key ? 'selected' : ''}>
-                  ${this.escapeHtml(p.key)}
+                <option value="${escapeHtml(p.key)}" ${this.filters.projectKey === p.key ? 'selected' : ''}>
+                  ${escapeHtml(p.key)}
                 </option>
               `).join('')}
             </select>
@@ -109,16 +111,6 @@ export class RoadmapToolbar {
         </div>
       </div>
     `;
-  }
-
-  /**
-   * Escape HTML
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   /**

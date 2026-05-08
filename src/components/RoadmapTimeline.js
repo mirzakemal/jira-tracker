@@ -3,6 +3,9 @@
  * Renders issues as horizontal bars on a timeline with swimlanes
  */
 
+import { escapeHtml } from '../utils/html.js';
+import { formatDate } from '../utils/date.js';
+
 export class RoadmapTimeline {
   constructor(roadmapData, filters, onIssueClick) {
     this.roadmapData = roadmapData || { epics: [], sprints: [], issues: [], groupedData: [] };
@@ -212,15 +215,6 @@ export class RoadmapTimeline {
   }
 
   /**
-   * Format date for display
-   */
-  formatDate(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  /**
    * Render the timeline
    */
   render() {
@@ -250,7 +244,7 @@ export class RoadmapTimeline {
               <div class="timeline-gantt-header">
                 ${periods.map(period => `
                   <div class="timeline-period" style="left: ${period.position}%; width: ${period.width}%;">
-                    ${this.escapeHtml(period.label)}
+                    ${escapeHtml(period.label)}
                   </div>
                 `).join('')}
               </div>
@@ -288,10 +282,10 @@ export class RoadmapTimeline {
     const headerText = showName ? epic.name : epic.key;
 
     return `
-      <div class="timeline-swimlane" data-epic-key="${this.escapeHtml(epic.key)}">
+      <div class="timeline-swimlane" data-epic-key="${escapeHtml(epic.key)}">
         <div class="swimlane-header">
-          <span class="swimlane-title" title="${this.escapeHtml(epic.name)}">
-            ${this.escapeHtml(headerText)}
+          <span class="swimlane-title" title="${escapeHtml(epic.name)}">
+            ${escapeHtml(headerText)}
           </span>
           <span class="swimlane-count">${issues.length} issue${issues.length !== 1 ? 's' : ''}</span>
         </div>
@@ -398,10 +392,10 @@ export class RoadmapTimeline {
 
       return `
         <div class="issue-milestone ${statusColor}"
-             data-issue-key="${this.escapeHtml(issue.key)}"
+             data-issue-key="${escapeHtml(issue.key)}"
              style="left: ${pos}%; top: ${topPosition}px; z-index: ${5 + row};"
-             title="${this.escapeHtml(`${issue.key}: ${issue.summary || ''}\nStatus: ${issue.status || 'Unknown'}\nNo date range — estimated from created date`)}">
-          <span class="milestone-key">${this.escapeHtml(issue.key)}</span>
+             title="${escapeHtml(`${issue.key}: ${issue.summary || ''}\nStatus: ${issue.status || 'Unknown'}\nNo date range — estimated from created date`)}">
+          <span class="milestone-key">${escapeHtml(issue.key)}</span>
         </div>
       `;
     }
@@ -434,18 +428,18 @@ export class RoadmapTimeline {
       `${issue.key}: ${issue.summary || ''}`,
       `Status: ${issue.status || 'Unknown'}`,
       issue.assignee_name ? `Assignee: ${issue.assignee_name}` : null,
-      issue.start_date ? `Start: ${this.formatDate(issue.start_date)}` : null,
-      issue.due_date ? `Due: ${this.formatDate(issue.due_date)}` : null,
+      issue.start_date ? `Start: ${formatDate(issue.start_date)}` : null,
+      issue.due_date ? `Due: ${formatDate(issue.due_date)}` : null,
       issue.fix_version ? `Version: ${issue.fix_version}` : null
     ].filter(Boolean);
 
     return `
       <div class="issue-bar ${statusColor} ${extendsClass} ${startOverflowClass} ${narrowClass} ${tinyClass}"
-           data-issue-key="${this.escapeHtml(issue.key)}"
+           data-issue-key="${escapeHtml(issue.key)}"
            style="left: ${position}%; width: ${width}%; top: ${topPosition}px; z-index: ${5 + row};"
-           title="${this.escapeHtml(tooltipLines.join('\n'))}">
-        <span class="issue-bar-key">${this.escapeHtml(issue.key)}</span>
-        <span class="issue-bar-summary">${this.escapeHtml(issue.summary || '')}</span>
+           title="${escapeHtml(tooltipLines.join('\n'))}">
+        <span class="issue-bar-key">${escapeHtml(issue.key)}</span>
+        <span class="issue-bar-summary">${escapeHtml(issue.summary || '')}</span>
       </div>
     `;
   }
@@ -519,10 +513,10 @@ export class RoadmapTimeline {
           return `
             <div class="sprint-overlay-bar ${startOverflowClass}"
                  style="left: ${sprint.position}%; width: ${sprint.width}%; top: ${topPosition}px;"
-                 title="${this.escapeHtml(sprint.name)}
-                        ${sprint.start_date ? '\nStart: ' + this.formatDate(sprint.start_date) : ''}
-                        ${sprint.end_date ? '\nEnd: ' + this.formatDate(sprint.end_date) : ''}">
-              <span class="sprint-overlay-label">${this.escapeHtml(sprint.name)}</span>
+                 title="${escapeHtml(sprint.name)}
+                        ${sprint.start_date ? '\nStart: ' + formatDate(sprint.start_date) : ''}
+                        ${sprint.end_date ? '\nEnd: ' + formatDate(sprint.end_date) : ''}">
+              <span class="sprint-overlay-label">${escapeHtml(sprint.name)}</span>
             </div>
           `;
         }).join('')}
@@ -554,16 +548,6 @@ export class RoadmapTimeline {
         headerScroll.scrollLeft = body.scrollLeft;
       });
     }
-  }
-
-  /**
-   * Escape HTML
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 }
 

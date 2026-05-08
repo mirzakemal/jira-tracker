@@ -1,4 +1,6 @@
 import logger from '../utils/logger.js';
+import { escapeHtml } from '../utils/html.js';
+import { formatDate } from '../utils/date.js';
 
 export class IssueDetailDrawer {
   constructor(issueKey, jiraDomain, onClose) {
@@ -64,41 +66,42 @@ export class IssueDetailDrawer {
       <div class="issue-detail-drawer" id="issue-detail-drawer" role="dialog" aria-modal="true" aria-label="Issue ${i.key}">
         <div class="drawer-header">
           <div class="drawer-title">
-            <span class="issue-type-badge">${this.escapeHtml(i.issue_type || 'Issue')}</span>
-            <span class="issue-key">${this.escapeHtml(i.key)}</span>
-            <span class="issue-status-badge">${this.escapeHtml(i.status || 'Unknown')}</span>
+            <span class="issue-type-badge">${escapeHtml(i.issue_type || 'Issue')}</span>
+            <span class="issue-key">${escapeHtml(i.key)}</span>
+            <span class="issue-status-badge">${escapeHtml(i.status || 'Unknown')}</span>
           </div>
           <div class="drawer-actions">
             <a href="${jiraUrl}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">Open in Jira</a>
+            <button class="btn btn-secondary btn-sm" id="dep-graph-btn" data-issue="${escapeHtml(i.key)}" data-summary="${escapeHtml(i.summary || '')}" aria-label="Show dependencies">Dependencies</button>
             <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
           </div>
         </div>
         <div class="drawer-body">
-          <h2 class="issue-summary">${this.escapeHtml(i.summary || 'No summary')}</h2>
+          <h2 class="issue-summary">${escapeHtml(i.summary || 'No summary')}</h2>
           <div class="issue-meta-grid">
             <div class="meta-item">
               <label>Assignee</label>
-              <span>${this.escapeHtml(i.assignee_name || 'Unassigned')}</span>
+              <span>${escapeHtml(i.assignee_name || 'Unassigned')}</span>
             </div>
             <div class="meta-item">
               <label>Reporter</label>
-              <span>${this.escapeHtml(i.reporter_name || 'Unknown')}</span>
+              <span>${escapeHtml(i.reporter_name || 'Unknown')}</span>
             </div>
             <div class="meta-item">
               <label>Priority</label>
-              <span>${this.escapeHtml(i.priority || 'None')}</span>
+              <span>${escapeHtml(i.priority || 'None')}</span>
             </div>
             <div class="meta-item">
               <label>Fix Version</label>
-              <span>${this.escapeHtml(i.fix_version || '-')}</span>
+              <span>${escapeHtml(i.fix_version || '-')}</span>
             </div>
             <div class="meta-item">
               <label>Created</label>
-              <span>${this.formatDate(i.created_at)}</span>
+              <span>${formatDate(i.created_at)}</span>
             </div>
             <div class="meta-item">
               <label>Updated</label>
-              <span>${this.formatDate(i.updated_at)}</span>
+              <span>${formatDate(i.updated_at)}</span>
             </div>
           </div>
           ${this.renderDescription()}
@@ -109,7 +112,7 @@ export class IssueDetailDrawer {
             <h4>Local Tags</h4>
             <div class="issue-tags">
               ${i.tags && i.tags.length > 0
-                ? i.tags.map(t => `<span class="tag-badge">${this.escapeHtml(t)}</span>`).join('')
+                ? i.tags.map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')
                 : '<span class="no-data">No tags</span>'}
             </div>
           </div>
@@ -124,7 +127,7 @@ export class IssueDetailDrawer {
       <div class="issue-detail-drawer" id="issue-detail-drawer" role="dialog" aria-modal="true">
         <div class="drawer-header">
           <div class="drawer-title">
-            <span class="issue-key">${this.escapeHtml(this.issueKey)}</span>
+            <span class="issue-key">${escapeHtml(this.issueKey)}</span>
           </div>
           <div class="drawer-actions">
             <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
@@ -160,9 +163,9 @@ export class IssueDetailDrawer {
         <div class="issue-subtasks">
           ${subtasks.map(s => `
             <div class="subtask-item">
-              <span class="subtask-status">${this.escapeHtml(s.fields?.status?.name || 'Unknown')}</span>
-              <a href="#" class="subtask-key" data-issue-key="${this.escapeHtml(s.key)}">${this.escapeHtml(s.key)}</a>
-              <span class="subtask-summary">${this.escapeHtml(s.fields?.summary || '')}</span>
+              <span class="subtask-status">${escapeHtml(s.fields?.status?.name || 'Unknown')}</span>
+              <a href="#" class="subtask-key" data-issue-key="${escapeHtml(s.key)}">${escapeHtml(s.key)}</a>
+              <span class="subtask-summary">${escapeHtml(s.fields?.summary || '')}</span>
             </div>
           `).join('')}
         </div>
@@ -183,9 +186,9 @@ export class IssueDetailDrawer {
             if (!linked) return '';
             return `
               <div class="linked-issue-item">
-                <span class="link-type ${isOutward ? 'outward' : 'inward'}">${this.escapeHtml(type)}</span>
-                <a href="#" class="linked-issue-key" data-issue-key="${this.escapeHtml(linked.key)}">${this.escapeHtml(linked.key)}</a>
-                <span class="linked-issue-summary">${this.escapeHtml(linked.fields?.summary || '')}</span>
+                <span class="link-type ${isOutward ? 'outward' : 'inward'}">${escapeHtml(type)}</span>
+                <a href="#" class="linked-issue-key" data-issue-key="${escapeHtml(linked.key)}">${escapeHtml(linked.key)}</a>
+                <span class="linked-issue-summary">${escapeHtml(linked.fields?.summary || '')}</span>
               </div>
             `;
           }).join('')}
@@ -208,8 +211,8 @@ export class IssueDetailDrawer {
         <div class="issue-comments">
           ${comments.map(c => `
             <div class="comment-item">
-              <div class="comment-author">${this.escapeHtml(c.author?.displayName || 'Unknown')}</div>
-              <div class="comment-date">${this.formatDate(c.created)}</div>
+              <div class="comment-author">${escapeHtml(c.author?.displayName || 'Unknown')}</div>
+              <div class="comment-date">${formatDate(c.created)}</div>
               <div class="comment-body">${this.renderAdfPlainText(c.body)}</div>
             </div>
           `).join('')}
@@ -227,8 +230,8 @@ export class IssueDetailDrawer {
 
   renderAdfPlainText(node) {
     if (!node) return '';
-    if (typeof node === 'string') return this.escapeHtml(node);
-    if (node.text) return this.escapeHtml(node.text);
+    if (typeof node === 'string') return escapeHtml(node);
+    if (node.text) return escapeHtml(node.text);
     if (node.content && Array.isArray(node.content)) {
       return node.content.map(c => this._renderAdfNode(c)).join('');
     }
@@ -237,20 +240,20 @@ export class IssueDetailDrawer {
 
   _renderAdfNode(node) {
     if (!node) return '';
-    if (typeof node === 'string') return this.escapeHtml(node);
+    if (typeof node === 'string') return escapeHtml(node);
 
     const type = node.type;
     const content = node.content;
 
     if (node.text) {
-      let text = this.escapeHtml(node.text);
+      let text = escapeHtml(node.text);
       if (node.marks) {
         for (const mark of node.marks) {
           switch (mark.type) {
             case 'strong': text = `<strong>${text}</strong>`; break;
             case 'em': text = `<em>${text}</em>`; break;
             case 'code': text = `<code>${text}</code>`; break;
-            case 'link': text = `<a href="${this.escapeHtml(mark.attrs?.href || '#')}" target="_blank" rel="noopener">${text}</a>`; break;
+            case 'link': text = `<a href="${escapeHtml(mark.attrs?.href || '#')}" target="_blank" rel="noopener">${text}</a>`; break;
             case 'strike': text = `<del>${text}</del>`; break;
             case 'underline': text = `<u>${text}</u>`; break;
           }
@@ -273,9 +276,9 @@ export class IssueDetailDrawer {
       case 'blockquote': return `<blockquote>${inner}</blockquote>`;
       case 'rule': return '<hr>';
       case 'hardBreak': return '<br>';
-      case 'mention': return `<span class="mention">@${this.escapeHtml(node.attrs?.text || 'unknown')}</span>`;
-      case 'emoji': return this.escapeHtml(node.attrs?.text || node.attrs?.shortName || '');
-      case 'inlineCard': return `<a href="${this.escapeHtml(node.attrs?.url || '#')}" class="inline-card" target="_blank" rel="noopener">${this.escapeHtml(node.attrs?.url || 'link')}</a>`;
+      case 'mention': return `<span class="mention">@${escapeHtml(node.attrs?.text || 'unknown')}</span>`;
+      case 'emoji': return escapeHtml(node.attrs?.text || node.attrs?.shortName || '');
+      case 'inlineCard': return `<a href="${escapeHtml(node.attrs?.url || '#')}" class="inline-card" target="_blank" rel="noopener">${escapeHtml(node.attrs?.url || 'link')}</a>`;
       case 'media': return `<span class="media-placeholder">📎 Attachment</span>`;
       case 'table': return `<table class="adf-table">${inner}</table>`;
       case 'tableRow': return `<tr>${inner}</tr>`;
@@ -320,6 +323,15 @@ export class IssueDetailDrawer {
         }
       });
     });
+
+    document.getElementById('dep-graph-btn')?.addEventListener('click', () => {
+      const key = document.getElementById('dep-graph-btn')?.dataset.issue;
+      const summary = document.getElementById('dep-graph-btn')?.dataset.summary;
+      if (key) {
+        const encodedSummary = encodeURIComponent(summary || '');
+        window.navigate('deps', { issueKey: key, summary: encodedSummary });
+      }
+    });
   }
 
   _cleanup() {
@@ -332,20 +344,6 @@ export class IssueDetailDrawer {
       this._boundHashChange = null;
     }
     this._boundClose = null;
-  }
-
-  formatDate(date) {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric'
-    });
-  }
-
-  escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = String(str);
-    return div.innerHTML;
   }
 }
 

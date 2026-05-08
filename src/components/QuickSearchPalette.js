@@ -79,7 +79,7 @@ export class QuickSearchPalette {
       return `
         <div class="palette-result${selected}" data-index="${i}" data-issue-key="${issue.key}">
           <span class="palette-issue-key">${issue.key}</span>
-          <span class="palette-issue-summary">${this.escapeHtml(issue.summary || '')}</span>
+          <span class="palette-issue-summary">${escapeHtml(issue.summary || '')}</span>
           <span class="palette-issue-meta">
             ${issue.priority ? `<span class="priority-badge ${priorityClass}">${issue.priority}</span>` : ''}
             ${issue.status ? `<span class="palette-status">${issue.status}</span>` : ''}
@@ -170,13 +170,6 @@ export class QuickSearchPalette {
       const selectedEl = resultsContainer.querySelector('.palette-result.selected');
       selectedEl?.scrollIntoView({ block: 'nearest' });
     }
-  }
-
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 }
 

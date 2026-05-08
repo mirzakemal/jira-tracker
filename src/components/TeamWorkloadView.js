@@ -1,4 +1,5 @@
 import logger from '../utils/logger.js';
+import { escapeHtml } from '../utils/html.js';
 
 export class TeamWorkloadView {
   constructor(client, jiraDomain, onBack) {
@@ -7,6 +8,7 @@ export class TeamWorkloadView {
     this.onBack = onBack;
     this.data = null;
     this.isLoading = true;
+    this.error = null;
     this.boardId = null;
     this.sprintId = null;
     this.boards = [];
@@ -46,6 +48,8 @@ export class TeamWorkloadView {
   }
 
   render() {
+    if (this.error) return this.renderError();
+
     if (this.isLoading) {
       return `
         <div class="workload-view" id="workload-view">
@@ -112,7 +116,7 @@ export class TeamWorkloadView {
                 <tr>
                   <th class="heatmap-person-header">Team Member</th>
                   <th class="heatmap-total-header">Total</th>
-                  ${statuses.map(s => `<th class="heatmap-status-header" title="${this.escapeHtml(s)}">${this.escapeHtml(s.length > 12 ? s.substring(0, 12) + '…' : s)}</th>`).join('')}
+                  ${statuses.map(s => `<th class="heatmap-status-header" title="${escapeHtml(s)}">${escapeHtml(s.length > 12 ? s.substring(0, 12) + '…' : s)}</th>`).join('')}
                 </tr>
               </thead>
               <tbody>
@@ -120,7 +124,7 @@ export class TeamWorkloadView {
                   <tr>
                     <td class="heatmap-person">
                       <div class="person-info">
-                        <span class="person-name">${this.escapeHtml(person.name)}</span>
+                        <span class="person-name">${escapeHtml(person.name)}</span>
                         <div class="person-load-bar">
                           <div class="person-load-fill" style="width: ${Math.min(person.total / maxTotal * 100, 100)}%"></div>
                         </div>
@@ -136,8 +140,8 @@ export class TeamWorkloadView {
                       return `
                         <td class="heatmap-cell ${count > 0 ? 'has-issues ' + intensityClass : ''}"
                             style="--intensity: ${intensity}%"
-                            data-person="${this.escapeHtml(person.id)}"
-                            data-status="${this.escapeHtml(status)}"
+                            data-person="${escapeHtml(person.id)}"
+                            data-status="${escapeHtml(status)}"
                             data-count="${count}"
                             aria-label="${count} issues in ${status} for ${person.name}">
                           ${count > 0 ? `<span class="cell-count">${count}</span>` : '<span class="cell-empty">-</span>'}
@@ -165,11 +169,11 @@ export class TeamWorkloadView {
       <div class="workload-filters">
         <select id="workload-board-filter" class="board-select" aria-label="Board">
           <option value="">All Boards</option>
-          ${this.boards.map(b => `<option value="${b.id}" ${String(this.boardId) === String(b.id) ? 'selected' : ''}>${this.escapeHtml(b.name)}</option>`).join('')}
+          ${this.boards.map(b => `<option value="${b.id}" ${String(this.boardId) === String(b.id) ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('')}
         </select>
         <select id="workload-sprint-filter" class="board-select" aria-label="Sprint">
           <option value="">All Sprints</option>
-          ${this.sprints.map(s => `<option value="${s.id}" ${String(this.sprintId) === String(s.id) ? 'selected' : ''}>${this.escapeHtml(s.name)}</option>`).join('')}
+          ${this.sprints.map(s => `<option value="${s.id}" ${String(this.sprintId) === String(s.id) ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
         </select>
       </div>`;
   }
@@ -180,6 +184,11 @@ export class TeamWorkloadView {
 
     document.querySelector('.back-btn')?.addEventListener('click', () => {
       this.onBack?.();
+    });
+
+    document.getElementById('retry-load-btn')?.addEventListener('click', () => {
+      this.error = null;
+      this.load(this.boardId, this.sprintId);
     });
 
     document.getElementById('workload-board-filter')?.addEventListener('change', (e) => {
@@ -243,11 +252,11 @@ export class TeamWorkloadView {
     title.textContent = `${statusData.count} issues for ${person.name} — ${statusData.status}`;
     issues.innerHTML = statusData.issues.map(i => `
       <div class="popup-issue-item">
-        <a href="#" class="popup-issue-key" data-issue-key="${this.escapeHtml(i.key)}">${this.escapeHtml(i.key)}</a>
-        <span class="popup-issue-summary">${this.escapeHtml(i.summary || '')}</span>
+        <a href="#" class="popup-issue-key" data-issue-key="${escapeHtml(i.key)}">${escapeHtml(i.key)}</a>
+        <span class="popup-issue-summary">${escapeHtml(i.summary || '')}</span>
         <span class="popup-issue-meta">
-          ${i.priority ? `<span class="priority-badge">${this.escapeHtml(i.priority)}</span>` : ''}
-          ${i.issue_type ? `<span class="type-badge">${this.escapeHtml(i.issue_type)}</span>` : ''}
+          ${i.priority ? `<span class="priority-badge">${escapeHtml(i.priority)}</span>` : ''}
+          ${i.issue_type ? `<span class="type-badge">${escapeHtml(i.issue_type)}</span>` : ''}
         </span>
       </div>
     `).join('');
@@ -261,11 +270,25 @@ export class TeamWorkloadView {
     this.selectedPopupCell = null;
   }
 
-  escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = String(str);
-    return div.innerHTML;
+  destroy() {
+    if (this._boundDocClick) {
+      document.removeEventListener('click', this._boundDocClick);
+      this._boundDocClick = null;
+    }
+    this._eventsBound = false;
+  }
+
+  renderError() {
+    return `
+      <div class="workload-view">
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <h3>Failed to load workload data</h3>
+          <p>${escapeHtml(this.error || 'Unknown error')}</p>
+          <button class="btn btn-primary retry-btn" id="retry-load-btn">Retry</button>
+        </div>
+      </div>
+    `;
   }
 }
 

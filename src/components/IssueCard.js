@@ -3,6 +3,8 @@
  * Displays a single Jira issue
  */
 
+import { escapeHtml } from '../utils/html.js';
+
 export class IssueCard {
   constructor(issue) {
     this.issue = issue;
@@ -18,26 +20,26 @@ export class IssueCard {
     return `
       <div class="issue-card" draggable="true" data-issue-key="${key}">
         <div class="issue-card-header">
-          <span class="issue-type-icon" title="${this.escapeHtml(fields.issuetype?.name || 'Issue')}">
+          <span class="issue-type-icon" title="${escapeHtml(fields.issuetype?.name || 'Issue')}">
             ${issueTypeIcon}
           </span>
           <a href="https://${(window.jiraDomain || '').replace(/^https?:\/\//, '')}/browse/${key}" target="_blank" class="issue-key" onclick="event.stopPropagation()">
             ${key}
           </a>
         </div>
-        <div class="issue-summary" title="${this.escapeHtml(fields.summary)}">
-          ${this.escapeHtml(fields.summary)}
+        <div class="issue-summary" title="${escapeHtml(fields.summary)}">
+          ${escapeHtml(fields.summary)}
         </div>
         <div class="issue-card-footer">
-          <span class="issue-priority ${priorityClass}" title="Priority: ${this.escapeHtml(priority)}">
-            ${priorityIcon} ${this.escapeHtml(priority)}
+          <span class="issue-priority ${priorityClass}" title="Priority: ${escapeHtml(priority)}">
+            ${priorityIcon} ${escapeHtml(priority)}
           </span>
           ${fields.assignee ? `
             <img
-              src="${this.escapeHtml(fields.assignee.avatarUrls['24x24'])}"
+              src="${escapeHtml(fields.assignee.avatarUrls['24x24'])}"
               class="issue-assignee"
-              title="${this.escapeHtml(fields.assignee.displayName)}"
-              alt="${this.escapeHtml(fields.assignee.displayName)}"
+              title="${escapeHtml(fields.assignee.displayName)}"
+              alt="${escapeHtml(fields.assignee.displayName)}"
             />
           ` : '<span class="issue-unassigned" title="Unassigned">👤</span>'}
         </div>
@@ -65,13 +67,6 @@ export class IssueCard {
       'Subtask': '📝'
     };
     return icons[type] || '📄';
-  }
-
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   static getPriorityClass(priority) {

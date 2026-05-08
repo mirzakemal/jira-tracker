@@ -135,6 +135,9 @@ export class AllIssuesView {
       this.updateUrlFilters();
     } catch (error) {
       logger.error('[AllIssuesView] Failed to load issues:', error);
+      this.error = error.message;
+      this.isLoading = false;
+      this.refresh();
     }
   }
 
@@ -211,6 +214,8 @@ export class AllIssuesView {
    * Render the view
    */
   render() {
+    if (this.error) return this.renderError();
+
     const hasActiveFilters = Object.keys(this.filters || {}).length > 0;
 
     return `
@@ -356,6 +361,11 @@ export class AllIssuesView {
       }
     });
 
+    document.getElementById('retry-load-btn')?.addEventListener('click', () => {
+      this.error = null;
+      this.loadIssues(this.filters);
+    });
+
     const clearFiltersBtn = document.getElementById('clear-filters-btn');
     clearFiltersBtn?.addEventListener('click', () => {
       this.handleClearFilters();
@@ -408,6 +418,19 @@ export class AllIssuesView {
     link.download = `jira-issues-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  renderError() {
+    return `
+      <div class="all-issues-view">
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <h3>Failed to load issues</h3>
+          <p>${this.error || 'Unknown error'}</p>
+          <button class="btn btn-primary retry-btn" id="retry-load-btn">Retry</button>
+        </div>
+      </div>
+    `;
   }
 }
 

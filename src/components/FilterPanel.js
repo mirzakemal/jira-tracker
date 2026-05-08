@@ -4,6 +4,8 @@
  * and checkbox dropdown multi-selects
  */
 
+import { escapeHtml } from '../utils/html.js';
+
 export class FilterPanel {
   constructor(filters, onFilterChange) {
     this.filters = filters || {};
@@ -171,7 +173,7 @@ export class FilterPanel {
           id="search-filter"
           class="filter-search-input"
           placeholder="Search by key or summary..."
-          value="${this.escapeHtml(this.filters.searchQuery || '')}"
+          value="${escapeHtml(this.filters.searchQuery || '')}"
         />
         ${hasValue ? `<button class="clear-field-btn" data-field="searchQuery" title="Clear search">×</button>` : ''}
       </div>
@@ -204,8 +206,8 @@ export class FilterPanel {
         <select id="${id}-filter" class="filter-select">
           <option value="">All ${label}s</option>
           ${options.map(o => `
-            <option value="${this.escapeHtml(o.value)}" ${String(selected) === String(o.value) ? 'selected' : ''}>
-              ${this.escapeHtml(o.label)}
+            <option value="${escapeHtml(o.value)}" ${String(selected) === String(o.value) ? 'selected' : ''}>
+              ${escapeHtml(o.label)}
             </option>
           `).join('')}
         </select>
@@ -250,9 +252,9 @@ export class FilterPanel {
                 const checked = hasSelection && selected.includes(value);
                 return `
                   <label class="dropdown-option ${checked ? 'checked' : ''}">
-                    <input type="checkbox" value="${this.escapeHtml(String(value))}"
+                    <input type="checkbox" value="${escapeHtml(String(value))}"
                       data-field="${id}" ${checked ? 'checked' : ''}>
-                    <span>${this.escapeHtml(String(display))}</span>
+                    <span>${escapeHtml(String(display))}</span>
                   </label>
                 `;
               }).join('')}
@@ -272,8 +274,8 @@ export class FilterPanel {
     if (values.length <= 3) {
       return `<div class="multi-select-preview">${names.map((n, i) => `
         <span class="chip">
-          ${this.escapeHtml(String(n))}
-          <button class="chip-remove" data-field="${fieldKey}" data-value="${this.escapeHtml(String(values[i]))}">×</button>
+          ${escapeHtml(String(n))}
+          <button class="chip-remove" data-field="${fieldKey}" data-value="${escapeHtml(String(values[i]))}">×</button>
         </span>
       `).join('')}</div>`;
     }
@@ -508,11 +510,9 @@ export class FilterPanel {
     }
   }
 
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  destroy() {
+    document.removeEventListener('click', this._boundClickOutside);
+    this.openDropdown = null;
   }
 }
 

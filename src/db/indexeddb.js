@@ -6,7 +6,7 @@
 import logger from '../utils/logger.js';
 
 const DB_NAME = 'jira-planner-db';
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 const STORE_NAMES = {
   PROJECTS: 'projects',
   BOARDS: 'boards',
@@ -15,7 +15,9 @@ const STORE_NAMES = {
   USERS: 'users',
   TAGS: 'tags',
   VIEWS: 'views',
-  METADATA: 'metadata'
+  METADATA: 'metadata',
+  CHANGELOG: 'changelog',
+  ISSUELINKS: 'issuelinks'
 };
 
 let dbInstance = null;
@@ -86,6 +88,17 @@ export async function initDatabase() {
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.METADATA)) {
         db.createObjectStore(STORE_NAMES.METADATA, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_NAMES.CHANGELOG)) {
+        const changelogStore = db.createObjectStore(STORE_NAMES.CHANGELOG, { autoIncrement: true });
+        changelogStore.createIndex('sync_timestamp', 'sync_timestamp', { unique: false });
+        changelogStore.createIndex('issue_key', 'issue_key', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_NAMES.ISSUELINKS)) {
+        const linkStore = db.createObjectStore(STORE_NAMES.ISSUELINKS, { autoIncrement: true });
+        linkStore.createIndex('source_key', 'source_key', { unique: false });
+        linkStore.createIndex('target_key', 'target_key', { unique: false });
+        linkStore.createIndex('link_type', 'link_type', { unique: false });
       }
 
       logger.info('[IndexedDB] Database schema created/upgraded');

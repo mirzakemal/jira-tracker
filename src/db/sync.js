@@ -12,7 +12,8 @@ import {
   getAll,
   getAllFiltered,
   setMetadata,
-  getMetadata
+  getMetadata,
+  clear
 } from './indexeddb.js';
 
 import { CUSTOM_FIELDS, FIELD_PATTERNS } from '../jira-config.js';
@@ -24,7 +25,9 @@ const STORES = {
   ISSUES: 'issues',
   USERS: 'users',
   TAGS: 'tags',
-  METADATA: 'metadata'
+  METADATA: 'metadata',
+  CHANGELOG: 'changelog',
+  ISSUELINKS: 'issuelinks'
 };
 
 /**
@@ -35,6 +38,8 @@ export async function syncAll(client) {
 
   try {
     await initDatabase();
+    await clear(STORES.CHANGELOG);
+    await clear(STORES.ISSUELINKS);
 
     await syncProjects(client);
     await syncAllBoards(client);
@@ -43,8 +48,10 @@ export async function syncAll(client) {
     await setMetadata('last_full_sync', new Date().toISOString());
     await setMetadata('last_sync', new Date().toISOString());
 
-    logger.info('[Sync] Full sync completed');
-    return { success: true, timestamp: new Date() };
+    const changeCount = await countChangelogEntries();
+
+    logger.info(`[Sync] Full sync completed with ${changeCount} changes`);
+    return { success: true, timestamp: new Date(), changeCount };
   } catch (error) {
     logger.error('[Sync] Full sync failed:', error);
     throw error;
@@ -59,6 +66,8 @@ export async function syncIncremental(client) {
 
   try {
     await initDatabase();
+    await clear(STORES.CHANGELOG);
+    await clear(STORES.ISSUELINKS);
 
     const lastSync = await getMetadata('last_sync');
 
@@ -68,8 +77,10 @@ export async function syncIncremental(client) {
 
     await setMetadata('last_sync', new Date().toISOString());
 
-    logger.info('[Sync] Incremental sync completed');
-    return { success: true, timestamp: new Date() };
+    const changeCount = await countChangelogEntries();
+
+    logger.info(`[Sync] Incremental sync completed with ${changeCount} changes`);
+    return { success: true, timestamp: new Date(), changeCount };
   } catch (error) {
     logger.error('[Sync] Incremental sync failed:', error);
     throw error;
@@ -284,10 +295,11 @@ async function syncUpdatedIssues(client, sinceTimestamp) {
 }
 
 /**
- * Insert or update issues
+ * Insert or update issues with change tracking
  */
 async function upsertIssues(issues, boardId, sprintId) {
   const users = new Map();
+  const syncedAt = new Date().toISOString();
 
   for (const issue of issues) {
     const fields = issue.fields || {};
@@ -300,27 +312,30 @@ async function upsertIssues(issues, boardId, sprintId) {
     display_name: user.displayName,
     email: user.emailAddress || null,
     avatar_url: user.avatarUrls?.['24x24'] || null,
-    syncedAt: new Date().toISOString()
+    syncedAt
   }));
 
   await putBulk(STORES.USERS, usersToUpdate);
+
+  // Build map of existing issues for diff tracking
+  const oldIssuesList = await getAll(STORES.ISSUES);
+  const oldIssueMap = new Map();
+  for (const old of oldIssuesList) {
+    oldIssueMap.set(old.key, old);
+  }
 
   const issuesToUpdate = issues.map(issue => {
     const fields = issue.fields || {};
     const fixVersion = fields.fixVersions?.[0]?.name || null;
     const parentKey = fields.parent?.key || null;
 
-    // Calculate start date from sprint or use custom field
     let startDate = null;
     let sprintEndDate = null;
 
-    // Try to get sprint dates from issue.sprint field (expanded sprint data)
     if (issue.sprint) {
       const sprint = Array.isArray(issue.sprint) ? issue.sprint[0] : issue.sprint;
       startDate = sprint?.startDate || sprint?.start_date || null;
       sprintEndDate = sprint?.endDate || sprint?.end_date || null;
-
-      // Log if we found sprint dates - useful for debugging
       if (startDate || sprintEndDate) {
         logger.debug(`[Sync] Issue ${issue.key}: Found sprint dates - start: ${startDate}, end: ${sprintEndDate}`);
       }
@@ -339,7 +354,6 @@ async function upsertIssues(issues, boardId, sprintId) {
         const fieldName = key.toLowerCase();
         if (key === CUSTOM_FIELDS.customer) {
           if (Array.isArray(value)) {
-            // Handle array of strings or array of objects
             const customerValues = value.map(v => {
               if (typeof v === 'string') return v;
               if (v?.value) return v.value;
@@ -365,14 +379,11 @@ async function upsertIssues(issues, boardId, sprintId) {
         if (FIELD_PATTERNS.qaTester.some(p => fieldName.includes(p))) {
           qaTesterId = value?.accountId || null;
         }
-        // Code reviewer fields
         if (key === CUSTOM_FIELDS.codeReviewer1) {
-          // Code Reviewer #1
           issue.code_reviewer_1_id = value?.accountId || null;
           issue.code_reviewer_1_name = value?.displayName || null;
         }
         if (key === CUSTOM_FIELDS.codeReviewer2) {
-          // Code Reviewer #2
           issue.code_reviewer_2_id = value?.accountId || null;
           issue.code_reviewer_2_name = value?.displayName || null;
         }
@@ -401,7 +412,7 @@ async function upsertIssues(issues, boardId, sprintId) {
       updated_at: fields.updated || null,
       resolved_at: fields.resolutiondate || null,
       start_date: startDate,
-      due_date: fields.duedate || fields.dueDate || null, // Handle both camelCase and snake_case
+      due_date: fields.duedate || fields.dueDate || null,
       fix_version: fixVersion,
       parent_key: parentKey,
       customer,
@@ -411,11 +422,95 @@ async function upsertIssues(issues, boardId, sprintId) {
       board_id: boardId,
       jira_url: `/browse/${issue.key}`,
       raw_data: JSON.stringify(issue),
-      syncedAt: new Date().toISOString()
+      syncedAt
     };
   });
 
   await putBulk(STORES.ISSUES, issuesToUpdate);
+
+  // Extract issue links from raw_data
+  const linkEntries = [];
+  for (const rawIssue of issues) {
+    const rawData = rawIssue.fields?.issuelinks;
+    if (!rawData || !Array.isArray(rawData)) continue;
+
+    for (const link of rawData) {
+      const linkType = link.type?.name || 'relates to';
+      const linkTypeInward = link.type?.inward || null;
+      const linkTypeOutward = link.type?.outward || null;
+
+      if (link.outwardIssue) {
+        linkEntries.push({
+          source_key: rawIssue.key,
+          target_key: link.outwardIssue.key,
+          link_type: linkType,
+          direction: 'outward',
+          direction_label: linkTypeOutward || linkType
+        });
+      }
+      if (link.inwardIssue) {
+        linkEntries.push({
+          source_key: rawIssue.key,
+          target_key: link.inwardIssue.key,
+          link_type: linkType,
+          direction: 'inward',
+          direction_label: linkTypeInward || linkType
+        });
+      }
+    }
+  }
+
+  if (linkEntries.length > 0) {
+    await putBulk(STORES.ISSUELINKS, linkEntries);
+    logger.info(`[Sync] Extracted ${linkEntries.length} issue links`);
+  }
+
+  // Diff tracking: compare old vs new and log changes
+  const changeEntries = [];
+  for (const issue of issuesToUpdate) {
+    const oldIssue = oldIssueMap.get(issue.key);
+    if (!oldIssue) continue; // new issue, not a change
+
+    const changes = [];
+    if (oldIssue.status !== issue.status) {
+      changes.push({ field: 'status', old: oldIssue.status, new: issue.status });
+    }
+    if (oldIssue.assignee_name !== issue.assignee_name) {
+      changes.push({ field: 'assignee', old: oldIssue.assignee_name, new: issue.assignee_name });
+    }
+    if (oldIssue.priority !== issue.priority) {
+      changes.push({ field: 'priority', old: oldIssue.priority, new: issue.priority });
+    }
+    if (oldIssue.fix_version !== issue.fix_version) {
+      changes.push({ field: 'fix_version', old: oldIssue.fix_version, new: issue.fix_version });
+    }
+
+    if (changes.length > 0) {
+      changeEntries.push({
+        issue_key: issue.key,
+        issue_summary: issue.summary || '',
+        changes,
+        sync_timestamp: syncedAt
+      });
+    }
+  }
+
+  if (changeEntries.length > 0) {
+    await putBulk(STORES.CHANGELOG, changeEntries);
+    logger.info(`[Sync] Tracked ${changeEntries.length} changed issues`);
+  }
+}
+
+/**
+ * Count changelog entries
+ */
+async function countChangelogEntries() {
+  try {
+    const entries = await getAll(STORES.CHANGELOG);
+    return entries.length;
+  } catch {
+    return 0;
+  }
 }
 
 /**

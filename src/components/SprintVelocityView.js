@@ -1,5 +1,7 @@
-import { getSprintVelocity, getAllBoards } from '../db/queries.js';
+import { getSprintVelocity, getAllBoards, getSprintBurndown } from '../db/queries.js';
 import logger from '../utils/logger.js';
+import { escapeHtml } from '../utils/html.js';
+import { formatDate } from '../utils/date.js';
 
 export class SprintVelocityView {
   constructor(client, jiraDomain, onBack) {
@@ -8,9 +10,12 @@ export class SprintVelocityView {
     this.onBack = onBack;
     this.data = null;
     this.isLoading = true;
+    this.error = null;
     this.boardId = null;
     this.boards = [];
     this.animate = true;
+    this.burndowns = new Map();
+    this.expandedSprints = new Set();
   }
 
   async load(boardId = null) {
@@ -24,6 +29,7 @@ export class SprintVelocityView {
       this.refresh();
     } catch (error) {
       logger.error('[Velocity] Failed to load:', error);
+      this.error = error.message;
       this.isLoading = false;
       this.refresh();
     }
@@ -38,6 +44,8 @@ export class SprintVelocityView {
   }
 
   render() {
+    if (this.error) return this.renderError();
+
     if (this.isLoading) {
       return `<div class="velocity-dashboard" id="velocity-dashboard-container"><div class="loading-board"><div class="spinner"></div><p>Loading sprint velocity...</p></div></div>`;
     }
@@ -60,7 +68,7 @@ export class SprintVelocityView {
             <select class="velocity-board-filter" id="velocity-board-filter">
               <option value="">All Boards</option>
               ${this.boards.map(b => `
-                <option value="${b.id}" ${b.id === this.boardId ? 'selected' : ''}>${this.escapeHtml(b.name)}</option>
+                <option value="${b.id}" ${b.id === this.boardId ? 'selected' : ''}>${escapeHtml(b.name)}</option>
               `).join('')}
             </select>
           </div>
@@ -91,9 +99,9 @@ export class SprintVelocityView {
               const totalPct = Math.max(Math.round((sprint.total / maxTotal) * 100), 4);
               return `
                 <div class="bar-row ${this.animate ? 'bar-animate' : ''}">
-                  <div class="bar-label" title="${this.escapeHtml(sprint.name)}">
-                    <span class="bar-sprint-name">${this.escapeHtml(sprint.name)}</span>
-                    <span class="bar-sprint-date">${this.formatDate(sprint.start_date)}</span>
+                  <div class="bar-label" title="${escapeHtml(sprint.name)}">
+                    <span class="bar-sprint-name">${escapeHtml(sprint.name)}</span>
+                    <span class="bar-sprint-date">${formatDate(sprint.start_date)}</span>
                   </div>
                   <div class="bar-track" title="Total: ${sprint.total} issues">
                     <div class="bar-fill bar-total" style="--bar-width: ${totalPct}%">
@@ -122,8 +130,8 @@ export class SprintVelocityView {
             ${sprints.map(sprint => `
               <div class="sprint-card" data-sprint-id="${sprint.id}">
                 <div class="sprint-card-header">
-                  <div class="sprint-card-name">${this.escapeHtml(sprint.name)}</div>
-                  <div class="sprint-card-date">${this.formatDate(sprint.start_date)} → ${this.formatDate(sprint.end_date)}</div>
+                  <div class="sprint-card-name">${escapeHtml(sprint.name)}</div>
+                  <div class="sprint-card-date">${formatDate(sprint.start_date)} → ${formatDate(sprint.end_date)}</div>
                 </div>
                 <div class="sprint-card-stats">
                   <div class="stat">
@@ -142,12 +150,21 @@ export class SprintVelocityView {
                 ${sprint.assignees.length > 0 ? `
                   <div class="sprint-card-assignees">
                     ${sprint.assignees.map(a => `
-                      <div class="assignee-row" title="${this.escapeHtml(a.name)}: ${a.completed}/${a.total} done">
-                        <span class="assignee-name">${this.escapeHtml(a.name)}</span>
+                      <div class="assignee-row" title="${escapeHtml(a.name)}: ${a.completed}/${a.total} done">
+                        <span class="assignee-name">${escapeHtml(a.name)}</span>
                         <span class="assignee-bar" style="--width: ${a.total > 0 ? Math.round(a.completed / a.total * 100) : 0}%"></span>
                         <span class="assignee-count">${a.completed}/${a.total}</span>
                       </div>
                     `).join('')}
+                  </div>
+                ` : ''}
+                ${sprint.state !== 'future' ? `
+                  <div class="sprint-card-burndown">
+                    ${this.expandedSprints.has(sprint.id) ? this.renderBurndownChart(sprint.id) : `
+                      <button class="burndown-toggle" data-sprint-id="${sprint.id}">
+                        📈 Show Burndown
+                      </button>
+                    `}
                   </div>
                 ` : ''}
               </div>
@@ -170,7 +187,7 @@ export class SprintVelocityView {
             <select class="velocity-board-filter" id="velocity-board-filter">
               <option value="">All Boards</option>
               ${this.boards.map(b => `
-                <option value="${b.id}">${this.escapeHtml(b.name)}</option>
+                <option value="${b.id}">${escapeHtml(b.name)}</option>
               `).join('')}
             </select>
           ` : ''}
@@ -185,6 +202,11 @@ export class SprintVelocityView {
   }
 
   bindEvents() {
+    document.getElementById('retry-load-btn')?.addEventListener('click', () => {
+      this.error = null;
+      this.load(this.boardId);
+    });
+
     document.querySelector('.back-btn')?.addEventListener('click', () => {
       this.onBack?.();
     });
@@ -194,22 +216,139 @@ export class SprintVelocityView {
       const val = e.target.value;
       this.load(val ? parseInt(val) : null);
     });
-  }
 
-  formatDate(date) {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+    document.querySelectorAll('.burndown-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sprintId = parseInt(btn.dataset.sprintId);
+        this.toggleBurndown(sprintId);
+      });
     });
   }
 
-  escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  async toggleBurndown(sprintId) {
+    if (this.expandedSprints.has(sprintId)) {
+      this.expandedSprints.delete(sprintId);
+      this.refresh();
+      return;
+    }
+
+    this.expandedSprints.add(sprintId);
+    this.refresh();
+
+    if (!this.burndowns.has(sprintId)) {
+      try {
+        const data = await getSprintBurndown(sprintId);
+        this.burndowns.set(sprintId, data);
+        this.refresh();
+      } catch (e) {
+        this.burndowns.set(sprintId, { error: 'Failed to load burndown' });
+        this.refresh();
+      }
+    }
+  }
+
+  renderBurndownChart(sprintId) {
+    const data = this.burndowns.get(sprintId);
+
+    if (!data) {
+      return `
+        <div class="burndown-chart burndown-loading">
+          <div class="spinner mini-spinner"></div>
+          <span>Loading burndown...</span>
+        </div>
+      `;
+    }
+
+    if (data.error) {
+      return `
+        <div class="burndown-chart">
+          <p class="burndown-error">${escapeHtml(data.error)}</p>
+          <button class="burndown-toggle" data-sprint-id="${sprintId}">📈 Hide Burndown</button>
+        </div>
+      `;
+    }
+
+    const { dailyRemaining, idealLine, totalIssues, sprint } = data;
+    if (!dailyRemaining.length) {
+      return `
+        <div class="burndown-chart">
+          <p class="burndown-error">Sprint has invalid or missing dates</p>
+          <button class="burndown-toggle" data-sprint-id="${sprintId}">📈 Hide Burndown</button>
+        </div>
+      `;
+    }
+
+    const maxVal = totalIssues || 1;
+    const chartWidth = 400;
+    const chartHeight = 150;
+    const padLeft = 30;
+    const padRight = 10;
+    const padTop = 10;
+    const padBottom = 25;
+    const plotWidth = chartWidth - padLeft - padRight;
+    const plotHeight = chartHeight - padTop - padBottom;
+
+    const scaleX = (i) => padLeft + (i / (dailyRemaining.length - 1 || 1)) * plotWidth;
+    const scaleY = (v) => padTop + (1 - v / maxVal) * plotHeight;
+
+    const actualPoints = dailyRemaining.map((d, i) =>
+      `${scaleX(i)},${scaleY(d.remaining)}`
+    ).join(' ');
+
+    const idealPoints = idealLine.map((d, i) =>
+      `${scaleX(i)},${scaleY(d.remaining)}`
+    ).join(' ');
+
+    const yTicks = [0, Math.round(maxVal / 2), maxVal];
+    const xTicks = dailyRemaining.filter((_, i) => {
+      const count = dailyRemaining.length;
+      if (count <= 7) return true;
+      return i % Math.ceil(count / 7) === 0 || i === count - 1;
+    });
+
+    return `
+      <div class="burndown-chart">
+        <div class="burndown-chart-header">
+          <span class="burndown-title">Burndown: ${escapeHtml(sprint.name)}</span>
+          <button class="burndown-toggle" data-sprint-id="${sprintId}">📈 Hide Burndown</button>
+        </div>
+        <svg viewBox="0 0 ${chartWidth} ${chartHeight}" class="burndown-svg">
+          <!-- Y axis -->
+          ${yTicks.map(v => `
+            <text x="${padLeft - 4}" y="${scaleY(v) + 4}" text-anchor="end" class="burndown-tick">${v}</text>
+          `).join('')}
+          <!-- X axis -->
+          ${xTicks.map(d => `
+            <text x="${scaleX(dailyRemaining.indexOf(d))}" y="${chartHeight - 6}" text-anchor="middle" class="burndown-tick">${d.date.slice(5)}</text>
+          `).join('')}
+          <!-- Ideal line -->
+          <polyline points="${idealPoints}" class="burndown-line burndown-ideal" />
+          <!-- Actual line -->
+          <polyline points="${actualPoints}" class="burndown-line burndown-actual" />
+          <!-- Start point -->
+          <circle cx="${scaleX(0)}" cy="${scaleY(dailyRemaining[0]?.remaining ?? 0)}" r="3" class="burndown-dot" />
+          <!-- End point -->
+          <circle cx="${scaleX(dailyRemaining.length - 1)}" cy="${scaleY(dailyRemaining[dailyRemaining.length - 1]?.remaining ?? 0)}" r="3" class="burndown-dot" />
+        </svg>
+        <div class="burndown-legend">
+          <span class="burndown-legend-item burndown-legend-ideal">--- Ideal</span>
+          <span class="burndown-legend-item burndown-legend-actual">— Actual</span>
+        </div>
+      </div>
+    `;
+  }
+
+  renderError() {
+    return `
+      <div class="velocity-dashboard">
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <h3>Failed to load sprint data</h3>
+          <p>${escapeHtml(this.error || 'Unknown error')}</p>
+          <button class="btn btn-primary retry-btn" id="retry-load-btn">Retry</button>
+        </div>
+      </div>
+    `;
   }
 }
 
@@ -558,5 +697,120 @@ export const SprintVelocityViewStyles = `
   .empty-state p {
     color: var(--text-secondary);
     font-size: 14px;
+  }
+
+  /* Burndown Chart */
+  .sprint-card-burndown {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+
+  .burndown-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .burndown-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .burndown-chart {
+    margin-top: 8px;
+  }
+
+  .burndown-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .burndown-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .burndown-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .mini-spinner {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+  }
+
+  .burndown-error {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin: 0 0 6px 0;
+  }
+
+  .burndown-svg {
+    width: 100%;
+    height: auto;
+    background: var(--bg, #0f0f23);
+    border-radius: 6px;
+  }
+
+  .burndown-tick {
+    font-size: 8px;
+    fill: var(--text-secondary);
+  }
+
+  .burndown-line {
+    fill: none;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .burndown-ideal {
+    stroke: var(--text-secondary);
+    stroke-dasharray: 4, 4;
+    opacity: 0.5;
+  }
+
+  .burndown-actual {
+    stroke: var(--accent, #64ffda);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .burndown-dot {
+    fill: var(--accent, #64ffda);
+  }
+
+  .burndown-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .burndown-legend-item {
+    color: var(--text-secondary);
+  }
+
+  .burndown-legend-ideal {
+    color: var(--text-secondary);
+    opacity: 0.5;
+  }
+
+  .burndown-legend-actual {
+    color: var(--accent, #64ffda);
+    font-weight: 500;
   }
 `;

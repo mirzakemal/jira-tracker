@@ -4,6 +4,7 @@
  */
 
 import logger from '../utils/logger.js';
+import { escapeHtml } from '../utils/html.js';
 import { getSavedViews, saveView, deleteView } from '../db/queries.js';
 
 export class SavedViewsMenu {
@@ -14,16 +15,7 @@ export class SavedViewsMenu {
     this.views = [];
     this.isLoading = false;
     this.isSaving = false;
-  }
-
-  /**
-   * Escape HTML
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    this._boundDocClick = null;
   }
 
   /**
@@ -65,7 +57,7 @@ export class SavedViewsMenu {
               ? '<div class="saved-views-empty">No saved views yet</div>'
               : this.views.map(view => `
                   <div class="saved-view-item" data-view-id="${view.id}">
-                    <span class="view-name">${this.escapeHtml(view.name)}</span>
+                    <span class="view-name">${escapeHtml(view.name)}</span>
                     <button class="delete-view-btn" data-view-id="${view.id}" title="Delete view">✕</button>
                   </div>
                 `).join('')
@@ -127,11 +119,16 @@ export class SavedViewsMenu {
     });
 
     // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (dropdownContent && !dropdownContent.contains(e.target)) {
-        dropdownContent.style.display = 'none';
+    if (this._boundDocClick) {
+      document.removeEventListener('click', this._boundDocClick);
+    }
+    this._boundDocClick = (e) => {
+      const content = document.getElementById('saved-views-dropdown-content');
+      if (content && !content.contains(e.target) && e.target !== document.getElementById('saved-views-dropdown')) {
+        content.style.display = 'none';
       }
-    });
+    };
+    document.addEventListener('click', this._boundDocClick);
 
     // Load view
     const viewItems = document.querySelectorAll('.saved-view-item');
@@ -215,6 +212,16 @@ export class SavedViewsMenu {
         confirmSaveBtn?.click();
       }
     });
+  }
+
+  /**
+   * Clean up event listeners
+   */
+  destroy() {
+    if (this._boundDocClick) {
+      document.removeEventListener('click', this._boundDocClick);
+      this._boundDocClick = null;
+    }
   }
 }
 

@@ -4,6 +4,8 @@
  */
 
 import logger from '../utils/logger.js';
+import { escapeHtml } from '../utils/html.js';
+import { formatDate } from '../utils/date.js';
 
 export class TableView {
   constructor(issues, onIssueClick, options = {}) {
@@ -292,31 +294,31 @@ export class TableView {
     // Special rendering for certain columns
     switch (column) {
       case 'key':
-        return `<span class="issue-key">${this.escapeHtml(value)}</span>`;
+        return `<span class="issue-key">${escapeHtml(value)}</span>`;
 
       case 'summary':
-        return `<span class="issue-summary" title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</span>`;
+        return `<span class="issue-summary" title="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
 
       case 'priority':
-        return `<span class="priority-badge ${this.getPriorityClass(value)}">${this.escapeHtml(value)}</span>`;
+        return `<span class="priority-badge ${this.getPriorityClass(value)}">${escapeHtml(value)}</span>`;
 
       case 'status':
-        return `<span class="status-badge">${this.escapeHtml(value)}</span>`;
+        return `<span class="status-badge">${escapeHtml(value)}</span>`;
 
       case 'created_at':
       case 'updated_at':
       case 'resolved_at':
-        return `<span class="date-value" title="${value}">${this.formatDate(value)}</span>`;
+        return `<span class="date-value" title="${value}">${formatDate(value)}</span>`;
 
       case 'assignee_name':
       case 'reporter_name':
       case 'qa_tester_name':
       case 'code_reviewer_1_name':
       case 'code_reviewer_2_name':
-        return `<span class="user-badge">👤 ${this.escapeHtml(value)}</span>`;
+        return `<span class="user-badge">👤 ${escapeHtml(value)}</span>`;
 
       case 'issue_type':
-        return `<span class="issue-type-badge">${this.escapeHtml(value)}</span>`;
+        return `<span class="issue-type-badge">${escapeHtml(value)}</span>`;
 
       case 'reviewers':
         // Reviewers are stored as comma-separated account IDs
@@ -326,7 +328,7 @@ export class TableView {
         return `<span class="reviewers-badge" title="Reviewers: ${reviewerList.length}">👁 ${reviewerList.length}</span>`;
 
       default:
-        return `<span>${this.escapeHtml(value)}</span>`;
+        return `<span>${escapeHtml(value)}</span>`;
     }
   }
 
@@ -339,8 +341,8 @@ export class TableView {
     }
 
     return tags.map(tag => `
-      <span class="tag-badge" data-tag="${this.escapeHtml(tag)}">
-        ${this.escapeHtml(tag)}
+      <span class="tag-badge" data-tag="${escapeHtml(tag)}">
+        ${escapeHtml(tag)}
       </span>
     `).join('');
   }
@@ -464,14 +466,14 @@ export class TableView {
           <button class="modal-close" id="tags-modal-close">&times;</button>
         </div>
         <div class="tags-editor-body">
-          <p class="tags-editor-summary">${this.escapeHtml(issue.summary)}</p>
+          <p class="tags-editor-summary">${escapeHtml(issue.summary)}</p>
           <div class="tags-editor-existing" id="tags-editor-existing">
             ${tags.length === 0
               ? '<p class="no-tags">No tags yet</p>'
               : tags.map(tag => `
-                  <span class="tag-badge" data-tag="${this.escapeHtml(tag)}">
-                    ${this.escapeHtml(tag)}
-                    <button class="tag-remove" data-tag="${this.escapeHtml(tag)}">&times;</button>
+                  <span class="tag-badge" data-tag="${escapeHtml(tag)}">
+                    ${escapeHtml(tag)}
+                    <button class="tag-remove" data-tag="${escapeHtml(tag)}">&times;</button>
                   </span>
                 `).join('')
             }
@@ -485,7 +487,7 @@ export class TableView {
               list="tags-datalist"
             />
             <datalist id="tags-datalist">
-              ${knownTags.map(tag => `<option value="${this.escapeHtml(tag)}">`).join('')}
+              ${knownTags.map(tag => `<option value="${escapeHtml(tag)}">`).join('')}
             </datalist>
             <button class="btn btn-primary" id="add-tag-btn">Add Tag</button>
           </div>
@@ -551,9 +553,9 @@ export class TableView {
           existingContainer.innerHTML = newTags.length === 0
             ? '<p class="no-tags">No tags yet</p>'
             : newTags.map(tag => `
-                <span class="tag-badge" data-tag="${this.escapeHtml(tag)}">
-                  ${this.escapeHtml(tag)}
-                  <button class="tag-remove" data-tag="${this.escapeHtml(tag)}">&times;</button>
+                <span class="tag-badge" data-tag="${escapeHtml(tag)}">
+                  ${escapeHtml(tag)}
+                  <button class="tag-remove" data-tag="${escapeHtml(tag)}">&times;</button>
                 </span>
               `).join('');
 
@@ -572,9 +574,9 @@ export class TableView {
               existingContainer.innerHTML = updatedTags.length === 0
                 ? '<p class="no-tags">No tags yet</p>'
                 : updatedTags.map(t => `
-                    <span class="tag-badge" data-tag="${this.escapeHtml(t)}">
-                      ${this.escapeHtml(t)}
-                      <button class="tag-remove" data-tag="${this.escapeHtml(t)}">&times;</button>
+                    <span class="tag-badge" data-tag="${escapeHtml(t)}">
+                      ${escapeHtml(t)}
+                      <button class="tag-remove" data-tag="${escapeHtml(t)}">&times;</button>
                     </span>
                   `).join('');
             });
@@ -609,9 +611,9 @@ export class TableView {
           existingContainer.innerHTML = updatedTags.length === 0
             ? '<p class="no-tags">No tags yet</p>'
             : updatedTags.map(t => `
-                <span class="tag-badge" data-tag="${this.escapeHtml(t)}">
-                  ${this.escapeHtml(t)}
-                  <button class="tag-remove" data-tag="${this.escapeHtml(t)}">&times;</button>
+                <span class="tag-badge" data-tag="${escapeHtml(t)}">
+                  ${escapeHtml(t)}
+                  <button class="tag-remove" data-tag="${escapeHtml(t)}">&times;</button>
                 </span>
               `).join('');
         } catch (error) {
@@ -645,28 +647,6 @@ export class TableView {
     return '';
   }
 
-  /**
-   * Format date
-   */
-  formatDate(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  }
-
-  /**
-   * Escape HTML
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 }
 
 /**

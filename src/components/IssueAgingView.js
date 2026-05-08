@@ -1,6 +1,8 @@
 import { getIssueAging, getAllBoards, getAllSprints } from '../db/queries.js';
 import { openIssueDrawer } from './IssueDetailDrawer.js';
 import logger from '../utils/logger.js';
+import { escapeHtml } from '../utils/html.js';
+import { formatDate } from '../utils/date.js';
 
 export class IssueAgingView {
   constructor(client, jiraDomain, onBack) {
@@ -35,6 +37,7 @@ export class IssueAgingView {
       this.refresh();
     } catch (error) {
       logger.error('[Aging] Failed to load:', error);
+      this.error = error.message;
       this.isLoading = false;
       this.refresh();
     }
@@ -49,6 +52,8 @@ export class IssueAgingView {
   }
 
   render() {
+    if (this.error) return this.renderError();
+
     if (this.isLoading) {
       return `<div class="aging-view" id="aging-view"><div class="loading-board"><div class="spinner"></div><p>Loading issue aging report...</p></div></div>`;
     }
@@ -59,8 +64,8 @@ export class IssueAgingView {
 
     const stale = this.issues.filter(i => i.daysInStatus !== null && i.daysInStatus > 14).length;
     const total = this.issues.length;
-    const boardsHtml = this.boards.map(b => `<option value="${b.id}"${b.id === this.boardId ? ' selected' : ''}>${this.escapeHtml(b.name)}</option>`).join('');
-    const sprintsHtml = this.sprints.map(s => `<option value="${s.id}"${s.id === this.sprintId ? ' selected' : ''}>${this.escapeHtml(s.name)}</option>`).join('');
+    const boardsHtml = this.boards.map(b => `<option value="${b.id}"${b.id === this.boardId ? ' selected' : ''}>${escapeHtml(b.name)}</option>`).join('');
+    const sprintsHtml = this.sprints.map(s => `<option value="${s.id}"${s.id === this.sprintId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
 
     const sortIcon = (field) => {
       if (this.sortField !== field) return '<span class="sort-arrow neutral">↕</span>';
@@ -127,14 +132,14 @@ export class IssueAgingView {
                 return `
                   <tr class="aging-row ${stalenessClass}" data-issue-key="${issue.key}">
                     <td class="aging-key">${issue.key}</td>
-                    <td class="aging-summary">${this.escapeHtml(issue.summary || '')}</td>
-                    <td>${this.escapeHtml(issue.status || '')}</td>
+                    <td class="aging-summary">${escapeHtml(issue.summary || '')}</td>
+                    <td>${escapeHtml(issue.status || '')}</td>
                     <td class="aging-days">
                       ${days !== null ? days : '—'}
                     </td>
-                    <td>${this.escapeHtml(issue.assignee_name || 'Unassigned')}</td>
-                    <td>${this.escapeHtml(issue.priority || '')}</td>
-                    <td class="aging-date">${this.formatDate(issue.updated_at)}</td>
+                    <td>${escapeHtml(issue.assignee_name || 'Unassigned')}</td>
+                    <td>${escapeHtml(issue.priority || '')}</td>
+                    <td class="aging-date">${formatDate(issue.updated_at)}</td>
                   </tr>
                 `;
               }).join('')}
@@ -146,8 +151,8 @@ export class IssueAgingView {
   }
 
   renderEmpty() {
-    const boardsHtml = this.boards.map(b => `<option value="${b.id}"${b.id === this.boardId ? ' selected' : ''}>${this.escapeHtml(b.name)}</option>`).join('');
-    const sprintsHtml = this.sprints.map(s => `<option value="${s.id}"${s.id === this.sprintId ? ' selected' : ''}>${this.escapeHtml(s.name)}</option>`).join('');
+    const boardsHtml = this.boards.map(b => `<option value="${b.id}"${b.id === this.boardId ? ' selected' : ''}>${escapeHtml(b.name)}</option>`).join('');
+    const sprintsHtml = this.sprints.map(s => `<option value="${s.id}"${s.id === this.sprintId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
     return `
       <div class="aging-view" id="aging-view">
         <div class="view-header">
@@ -176,6 +181,11 @@ export class IssueAgingView {
   bindEvents() {
     document.getElementById('aging-back-btn')?.addEventListener('click', () => {
       this.onBack?.();
+    });
+
+    document.getElementById('retry-load-btn')?.addEventListener('click', () => {
+      this.error = null;
+      this.load(this.boardId, this.sprintId);
     });
 
     document.getElementById('aging-board-filter')?.addEventListener('change', (e) => {
@@ -213,15 +223,17 @@ export class IssueAgingView {
     });
   }
 
-  formatDate(dateStr) {
-    return dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-  }
-
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  renderError() {
+    return `
+      <div class="aging-view">
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <h3>Failed to load aging report</h3>
+          <p>${escapeHtml(this.error || 'Unknown error')}</p>
+          <button class="btn btn-primary retry-btn" id="retry-load-btn">Retry</button>
+        </div>
+      </div>
+    `;
   }
 }
 

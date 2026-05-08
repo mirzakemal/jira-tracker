@@ -10,6 +10,8 @@ describe('ROUTES', () => {
       VELOCITY: 'velocity',
       WORKLOAD: 'workload',
       AGING: 'aging',
+      RELEASES: 'releases',
+      DASHBOARD: 'dashboard',
       SETTINGS: 'settings'
     });
   });

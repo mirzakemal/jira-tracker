@@ -40,9 +40,16 @@ class JiraClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = { ...this.getAuthHeader(), ...options.headers };
+    const timeout = options.timeout ?? 30000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(url, { ...options, headers });
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ errorMessages: [response.statusText] }));
@@ -73,11 +80,13 @@ class JiraClient {
         throw new JiraError(response.status, error.errorMessages?.[0] || error.message || response.statusText);
       }
 
+      clearTimeout(timer);
       return await response.json();
     } catch (error) {
+      clearTimeout(timer);
       if (error instanceof JiraError) throw error;
       if (error.name === 'AbortError') {
-        throw error; // Propagate abort errors for cancellation
+        throw new JiraError(0, 'Request timed out — the Jira server did not respond within ' + (timeout / 1000) + 's');
       }
       logger.error('[Jira API] Request failed:', endpoint, error);
       if (error.message.includes('fetch') || error.name === 'TypeError') {

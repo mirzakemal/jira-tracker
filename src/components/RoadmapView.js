@@ -26,6 +26,7 @@ export class RoadmapView {
       zoomLevel: 'week'
     };
     this.isLoading = false;
+    this.error = null;
   }
 
   /**
@@ -111,6 +112,8 @@ export class RoadmapView {
    * Render the view
    */
   render() {
+    if (this.error) return this.renderError();
+
     return `
       <div class="roadmap-view" id="roadmap-view">
         <div class="view-header">
@@ -186,6 +189,19 @@ export class RoadmapView {
         this.onBack();
       }
     });
+    const retryBtn = document.getElementById('retry-load-btn');
+    retryBtn?.addEventListener('click', () => this.load());
+  }
+
+  renderError() {
+    return `
+      <div class="error-state">
+        <div class="error-icon">⚠</div>
+        <h3>Failed to load roadmap</h3>
+        <p>${this.error || 'An unexpected error occurred'}</p>
+        <button class="retry-btn" id="retry-load-btn">Retry</button>
+      </div>
+    `;
   }
 }
 

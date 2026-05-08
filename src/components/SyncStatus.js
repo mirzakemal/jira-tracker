@@ -3,11 +3,17 @@
  * Displays sync indicator and provides sync controls
  */
 
+import { timeAgo } from '../utils/date.js';
+import logger from '../utils/logger.js';
+import { showError } from '../utils/dom.js';
+
 export class SyncStatus {
-  constructor(onSyncRequest) {
+  constructor(onSyncRequest, jiraDomain) {
     this.onSyncRequest = onSyncRequest;
+    this.jiraDomain = jiraDomain;
     this.isSyncing = false;
     this.syncStatus = null;
+    this.changeCount = 0;
   }
 
   /**
@@ -15,6 +21,9 @@ export class SyncStatus {
    */
   setStatus(status) {
     this.syncStatus = status;
+    if (typeof status.changeCount === 'number') {
+      this.changeCount = status.changeCount;
+    }
     this.refresh();
   }
 
@@ -33,8 +42,14 @@ export class SyncStatus {
     const { lastSync, lastFullSync, issueCount } = this.syncStatus || {};
 
     const lastSyncText = lastSync
-      ? this.timeAgo(new Date(lastSync))
+      ? timeAgo(new Date(lastSync))
       : 'Never';
+
+    const badgeHtml = (!this.isSyncing && this.changeCount > 0)
+      ? `<button class="sync-changes-badge" id="sync-changes-badge" title="View what changed">
+           ${this.changeCount} issue${this.changeCount !== 1 ? 's' : ''} updated
+         </button>`
+      : '';
 
     return `
       <div class="sync-status" id="sync-status">
@@ -47,6 +62,8 @@ export class SyncStatus {
           ${this.isSyncing ? '⟳' : '🔄'}
           ${this.isSyncing ? 'Syncing...' : 'Sync'}
         </button>
+
+        ${badgeHtml}
 
         <div class="sync-info">
           <span class="sync-count">${issueCount || 0} issues</span>
@@ -79,21 +96,25 @@ export class SyncStatus {
         this.onSyncRequest();
       }
     });
+
+    const badgeBtn = document.getElementById('sync-changes-badge');
+    if (badgeBtn) {
+      badgeBtn.addEventListener('click', () => this.showChangelog());
+    }
   }
 
-  /**
-   * Format time ago
-   */
-  timeAgo(date) {
-    const seconds = Math.floor((new Date() - date) / 1000);
-
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
-
-    return date.toLocaleDateString();
+  async showChangelog() {
+    try {
+      const { getLatestChangelog } = await import('../db/queries.js');
+      const { openChangelogDrawer } = await import('./ChangelogDrawer.js');
+      const changes = await getLatestChangelog();
+      openChangelogDrawer(changes, this.jiraDomain, null);
+    } catch (error) {
+      logger.error('[SyncStatus] Failed to show changelog:', error);
+      showError('Could not load changelog. Wait for next sync.');
+    }
   }
+
 }
 
 /**
@@ -150,5 +171,22 @@ export const SyncStatusStyles = `
 
   .sync-time {
     color: var(--text-secondary);
+  }
+
+  .sync-changes-badge {
+    padding: 4px 12px;
+    background: color-mix(in srgb, var(--accent, #64ffda) 12%, transparent);
+    color: var(--accent, #64ffda);
+    border: 1px solid var(--accent, #64ffda);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .sync-changes-badge:hover {
+    background: color-mix(in srgb, var(--accent, #64ffda) 20%, transparent);
+    transform: translateY(-1px);
   }
 `;

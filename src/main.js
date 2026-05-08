@@ -8,9 +8,13 @@ import { RoadmapView, RoadmapViewStyles } from './components/RoadmapView.js'
 import { SprintVelocityView, SprintVelocityViewStyles } from './components/SprintVelocityView.js'
 import { TeamWorkloadView, TeamWorkloadViewStyles } from './components/TeamWorkloadView.js'
 import { IssueAgingView, IssueAgingViewStyles } from './components/IssueAgingView.js'
+import { ReleaseProgressView, ReleaseProgressViewStyles } from './components/ReleaseProgressView.js'
 import { QuickSearchPalette, QuickSearchPaletteStyles } from './components/QuickSearchPalette.js'
 import { IssueDetailDrawerStyles } from './components/IssueDetailDrawer.js'
+import { DashboardHomeView, DashboardHomeViewStyles } from './components/DashboardHomeView.js'
+import { DependencyGraphView, DependencyGraphViewStyles } from './components/DependencyGraphView.js'
 import { SyncStatus, SyncStatusStyles } from './components/SyncStatus.js'
+import { ChangelogDrawerStyles } from './components/ChangelogDrawer.js'
 import { FilterPanelStyles } from './components/FilterPanel.js'
 import { TableViewStyles } from './components/TableView.js'
 import { SavedViewsMenuStyles } from './components/SavedViewsMenu.js'
@@ -22,6 +26,7 @@ import { syncAll, syncIncremental, getSyncStatus } from './db/sync.js'
 import { invalidateFilterCache } from './db/queries.js'
 import { JiraClient } from './api/jira.js'
 import { navigate, onRouteChange, updateQueryParams, filtersToParams, paramsToFilters, ROUTES, parseRoute } from './utils/router.js'
+import { registerServiceWorker } from './utils/sw-register.js'
 
 // App State
 const state = {
@@ -39,6 +44,9 @@ const state = {
   filters: {}, // Store current filters
   currentViewInstance: null // Track active view instance for cleanup
 }
+
+// Shared SyncStatus instance — created once, reused
+let syncStatusComponent = null
 
 // Runtime logger config from URL params (?log=debug)
 const urlParams = new URLSearchParams(window.location.search)
@@ -72,6 +80,12 @@ async function init() {
   // Initial route is handled by autoConnect() which parses route before rendering
   onRouteChange(handleRouteChange)
 
+  // Register service worker for offline support
+  registerServiceWorker()
+
+  // Set up online/offline detection for the offline banner
+  setupOfflineIndicator()
+
   // Global Cmd+K / Ctrl+K quick search shortcut
   let quickSearchPalette = null
   window.addEventListener('keydown', (e) => {
@@ -83,6 +97,23 @@ async function init() {
       quickSearchPalette.open()
     }
   })
+}
+
+function renderDependencyGraph(params) {
+  const issueKey = params.issueKey;
+  const summary = params.summary ? decodeURIComponent(params.summary) : issueKey;
+
+  const graphView = new DependencyGraphView(issueKey, summary, (key, nodeSummary) => {
+    window.navigate('deps', { issueKey: key, summary: encodeURIComponent(nodeSummary || key) });
+  });
+  state.currentViewInstance = graphView;
+  state._depIssueKey = issueKey;
+
+  const container = document.getElementById('issue-board-container');
+  if (container) {
+    container.innerHTML = `<div id="dep-graph-container"></div>`;
+    graphView.init().catch(err => logger.error('[Deps] init failed:', err));
+  }
 }
 
 /**
@@ -119,7 +150,7 @@ function handleRouteChange({ route, params }) {
       const container = document.getElementById('issue-board-container')
       if (container) {
         container.innerHTML = state.currentViewInstance.render()
-        state.currentViewInstance.loadRoadmap(filters)
+        state.currentViewInstance.loadRoadmap(filters).catch(err => logger.error('[Roadmap] loadRoadmap failed:', err))
       }
     } else {
       // Already in roadmap view, apply filters if they changed
@@ -127,7 +158,7 @@ function handleRouteChange({ route, params }) {
         const filtersChanged = JSON.stringify(state.currentViewInstance.filters) !== JSON.stringify(filters)
         if (filtersChanged) {
           state.currentViewInstance.filters = filters
-          state.currentViewInstance.loadRoadmap()
+          state.currentViewInstance.loadRoadmap().catch(err => logger.error('[Roadmap] loadRoadmap failed:', err))
         }
       }
     }
@@ -150,7 +181,7 @@ function handleRouteChange({ route, params }) {
       const container = document.getElementById('issue-board-container')
       if (container) {
         container.innerHTML = state.currentViewInstance.render()
-        state.currentViewInstance.loadIssues(filters)
+        state.currentViewInstance.loadIssues(filters).catch(err => logger.error('[AllIssues] loadIssues failed:', err))
       }
     } else {
       // Already in all-issues view, apply filters if they changed
@@ -160,7 +191,7 @@ function handleRouteChange({ route, params }) {
         if (filtersChanged) {
           // Use the debounced loadIssues for smooth filtering
           state.currentViewInstance.filters = filters
-          state.currentViewInstance.loadIssues()
+          state.currentViewInstance.loadIssues().catch(err => logger.error('[AllIssues] loadIssues failed:', err))
         }
       }
     }
@@ -179,7 +210,7 @@ function handleRouteChange({ route, params }) {
         boardSelectorContainer.style.display = 'block'
       }
 
-      loadIssues()
+      loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
     }
   } else if (route === ROUTES.VELOCITY) {
     logger.info('[Route] Switching to Sprint Velocity view')
@@ -199,7 +230,7 @@ function handleRouteChange({ route, params }) {
       const container = document.getElementById('issue-board-container')
       if (container) {
         container.innerHTML = velocityView.render()
-        velocityView.load()
+        velocityView.load().catch(err => logger.error('[Velocity] load failed:', err))
       }
     }
   } else if (route === ROUTES.WORKLOAD) {
@@ -220,13 +251,13 @@ function handleRouteChange({ route, params }) {
       const container = document.getElementById('issue-board-container')
       if (container) {
         container.innerHTML = workloadView.render()
-        workloadView.load(filters.boardId, filters.sprintId)
+        workloadView.load(filters.boardId, filters.sprintId).catch(err => logger.error('[Workload] load failed:', err))
       }
     }
-  } else if (route === ROUTES.AGING) {
-    logger.info('[Route] Switching to Issue Aging view')
-    if (state.currentView !== 'aging') {
-      state.currentView = 'aging'
+  } else if (route === ROUTES.RELEASES) {
+    logger.info('[Route] Switching to Release Progress view')
+    if (state.currentView !== 'releases') {
+      state.currentView = 'releases'
       updateViewToggle()
 
       const boardSelectorContainer = document.getElementById('board-selector-container')
@@ -236,12 +267,55 @@ function handleRouteChange({ route, params }) {
 
       cleanupCurrentView()
 
-      const agingView = new IssueAgingView(state.client, state.jiraDomain, switchToBoardView)
-      state.currentViewInstance = agingView
+      const releasesView = new ReleaseProgressView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = releasesView
       const container = document.getElementById('issue-board-container')
       if (container) {
-        container.innerHTML = agingView.render()
-        agingView.load(filters.boardId, filters.sprintId)
+        container.innerHTML = releasesView.render()
+        releasesView.load(filters.projectKey).catch(err => logger.error('[Releases] load failed:', err))
+      }
+    } else if (state.currentViewInstance && filters) {
+      const view = state.currentViewInstance
+      if (filters.projectKey !== undefined && view.projectKey !== filters.projectKey) {
+        view.load(filters.projectKey).catch(err => logger.error('[Releases] load failed:', err))
+      }
+    }
+  } else if (route === 'deps') {
+    logger.info('[Route] Switching to Dependency Graph view')
+    if (state.currentView !== 'deps') {
+      state.currentView = 'deps'
+      updateViewToggle()
+
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) {
+        boardSelectorContainer.style.display = 'none'
+      }
+
+      cleanupCurrentView()
+      renderDependencyGraph(params)
+    } else if (params.issueKey !== state._depIssueKey) {
+      cleanupCurrentView()
+      renderDependencyGraph(params)
+    }
+  } else if (route === ROUTES.DASHBOARD) {
+    logger.info('[Route] Switching to Dashboard view')
+    if (state.currentView !== 'dashboard') {
+      state.currentView = 'dashboard'
+      updateViewToggle()
+
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) {
+        boardSelectorContainer.style.display = 'none'
+      }
+
+      cleanupCurrentView()
+
+      const dashboardView = new DashboardHomeView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = dashboardView
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = dashboardView.render()
+        dashboardView.load().catch(err => logger.error('[Dashboard] load failed:', err))
       }
     }
   }
@@ -361,6 +435,12 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <button class="toggle-btn ${initialView === 'aging' ? 'active' : ''}" id="aging-view-btn">
                 Aging
               </button>
+              <button class="toggle-btn ${initialView === 'releases' ? 'active' : ''}" id="releases-view-btn">
+                Releases
+              </button>
+              <button class="toggle-btn ${initialView === 'dashboard' ? 'active' : ''}" id="dashboard-view-btn">
+                Dashboard
+              </button>
             </div>
             <div id="sync-status-container"></div>
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
@@ -383,13 +463,15 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     document.getElementById('velocity-view-btn')?.addEventListener('click', () => switchToSprintVelocityView())
     document.getElementById('workload-view-btn')?.addEventListener('click', () => switchToWorkloadView())
     document.getElementById('aging-view-btn')?.addEventListener('click', () => switchToAgingView())
+    document.getElementById('releases-view-btn')?.addEventListener('click', () => switchToReleasesView())
+    document.getElementById('dashboard-view-btn')?.addEventListener('click', () => switchToDashboardView())
 
     // Render All Issues view BEFORE awaiting anything
     const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
     const container = document.getElementById('issue-board-container')
     if (container) {
       container.innerHTML = allIssuesView.render()
-      allIssuesView.loadIssues(filters)
+      allIssuesView.loadIssues(filters).catch(err => logger.error('[AllIssues] loadIssues failed:', err))
     }
 
     // Initialize sync status in background (non-blocking)
@@ -397,7 +479,7 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
 
     // Load board selector in background for later use
     const boardSelector = new BoardSelector(handleSelectionChange)
-    boardSelector.load(state.client)
+    boardSelector.load(state.client).catch(err => logger.error('[BoardSelector] load failed:', err))
   } else {
     // Render Board view
     appElement.innerHTML = `
@@ -429,6 +511,12 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <button class="toggle-btn" id="aging-view-btn">
                 Aging
               </button>
+              <button class="toggle-btn" id="releases-view-btn">
+                Releases
+              </button>
+              <button class="toggle-btn" id="dashboard-view-btn">
+                Dashboard
+              </button>
             </div>
             <div id="sync-status-container"></div>
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
@@ -453,6 +541,8 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     document.getElementById('velocity-view-btn')?.addEventListener('click', () => switchToSprintVelocityView())
     document.getElementById('workload-view-btn')?.addEventListener('click', () => switchToWorkloadView())
     document.getElementById('aging-view-btn')?.addEventListener('click', () => switchToAgingView())
+    document.getElementById('releases-view-btn')?.addEventListener('click', () => switchToReleasesView())
+    document.getElementById('dashboard-view-btn')?.addEventListener('click', () => switchToDashboardView())
 
     // Initialize sync status in background
     renderSyncStatus().catch(() => {})
@@ -482,11 +572,11 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
       }
 
       // Load initial issues
-      loadIssues()
+      loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
 
       // Auto-sync data in background
       autoSync()
-    })
+    }).catch(err => logger.error('[BoardSelector] load failed:', err))
   }
 }
 
@@ -630,6 +720,43 @@ async function loadIssues() {
 // Make loadIssues available globally for the retry button
 window.loadIssues = loadIssues
 
+/**
+ * Offline indicator banner
+ */
+function setupOfflineIndicator() {
+  let banner = document.getElementById('offline-banner');
+
+  function show(message) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'offline-banner';
+      banner.className = 'offline-banner';
+      document.body.appendChild(banner);
+    }
+    banner.className = 'offline-banner visible';
+    banner.textContent = message;
+  }
+
+  function hide() {
+    if (banner) {
+      banner.className = 'offline-banner';
+    }
+  }
+
+  window.addEventListener('offline', () => {
+    show('⚠️ You are offline. App data may be stale.');
+  });
+
+  window.addEventListener('online', () => {
+    hide();
+  });
+
+  // Initial check
+  if (!navigator.onLine) {
+    show('⚠️ You are offline. App data may be stale.');
+  }
+}
+
 // Initialize app
 init()
 
@@ -645,6 +772,7 @@ function addGlobalStyles() {
   style.textContent = `
     ${sharedStyles}
     ${SyncStatusStyles}
+    ${ChangelogDrawerStyles || ''}
     ${FilterPanelStyles}
     ${TableViewStyles}
     ${SavedViewsMenuStyles}
@@ -653,9 +781,43 @@ function addGlobalStyles() {
     ${SprintVelocityViewStyles || ''}
     ${TeamWorkloadViewStyles || ''}
     ${IssueAgingViewStyles || ''}
+    ${ReleaseProgressViewStyles || ''}
     ${QuickSearchPaletteStyles || ''}
     ${IssueDetailDrawerStyles || ''}
     ${AllIssuesViewStyles || ''}
+    ${DashboardHomeViewStyles || ''}
+    ${DependencyGraphViewStyles || ''}
+
+    /* Offline indicator */
+    .offline-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: #f59e0b;
+      color: #1a1a2e;
+      text-align: center;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .offline-banner.visible { display: flex; }
+    .offline-banner button {
+      background: #1a1a2e;
+      color: #f59e0b;
+      border: none;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
 
     .header-actions {
       display: flex;
@@ -665,6 +827,7 @@ function addGlobalStyles() {
 
     .view-toggle {
       display: flex;
+      flex-wrap: wrap;
       background: var(--surface);
       border-radius: 8px;
       padding: 4px;
@@ -747,14 +910,16 @@ async function renderSyncStatus() {
   const container = document.getElementById('sync-status-container')
   if (!container) return
 
-  const syncStatus = new SyncStatus(handleSyncRequest)
-  container.innerHTML = syncStatus.render()
-  syncStatus.bindEvents()
+  if (!syncStatusComponent) {
+    syncStatusComponent = new SyncStatus(handleSyncRequest, state.jiraDomain || '')
+  }
+  container.innerHTML = syncStatusComponent.render()
+  syncStatusComponent.bindEvents()
 
   // Load initial sync status
   try {
     const status = await getSyncStatus()
-    syncStatus.setStatus(status)
+    syncStatusComponent.setStatus(status)
   } catch (e) {
     // Database not initialized yet
     logger.info('[Sync] Initial status not available')
@@ -770,8 +935,9 @@ async function autoSync() {
       state.dbInitialized = true
     }
 
-    await syncIncremental(state.client)
+    const syncResult = await syncIncremental(state.client)
     const status = await getSyncStatus()
+    status.changeCount = syncResult.changeCount || 0
     updateSyncStatusUI(false, status)
 
     logger.info('[AutoSync] Background sync completed')
@@ -803,19 +969,20 @@ async function handleSyncRequest() {
 
     // Perform sync
     if (state.client) {
-      await syncAll(state.client)
-      invalidateFilterCache() // Invalidate cache after sync
+      const syncResult = await syncAll(state.client)
+      invalidateFilterCache()
       const status = await getSyncStatus()
+      status.changeCount = syncResult.changeCount || 0
       updateSyncStatusUI(false, status)
 
       // Reload issues if on all-issues view
       if (state.currentView === 'all-issues' && window.currentAllIssuesView) {
-        window.currentAllIssuesView.loadIssues()
+        window.currentAllIssuesView.loadIssues().catch(err => logger.error('[Sync] reload issues failed:', err))
       }
     }
   } catch (error) {
     logger.error('[Sync] Failed:', error)
-    alert(`Sync failed: ${error.message}`)
+    showError(`Sync failed: ${error.message}`)
     updateSyncStatusUI(false)
   }
 }
@@ -827,11 +994,13 @@ function updateSyncStatusUI(syncing, status = null) {
   const container = document.getElementById('sync-status-container')
   if (!container) return
 
-  const syncStatus = new SyncStatus(handleSyncRequest)
-  syncStatus.setSyncing(syncing)
-  if (status) syncStatus.setStatus(status)
-  container.innerHTML = syncStatus.render()
-  syncStatus.bindEvents()
+  if (!syncStatusComponent) {
+    syncStatusComponent = new SyncStatus(handleSyncRequest, state.jiraDomain || '')
+  }
+  syncStatusComponent.setSyncing(syncing)
+  if (status) syncStatusComponent.setStatus(status)
+  container.innerHTML = syncStatusComponent.render()
+  syncStatusComponent.bindEvents()
 }
 
 /**
@@ -868,7 +1037,7 @@ function switchToBoardView() {
     return
   }
 
-  loadIssues()
+  loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
 }
 
 /**
@@ -896,7 +1065,7 @@ async function switchToAllIssuesView(filters = {}) {
       state.dbInitialized = true
     } catch (error) {
       logger.error('[DB] Failed to initialize:', error)
-      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return
     }
@@ -910,7 +1079,7 @@ async function switchToAllIssuesView(filters = {}) {
 
   const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
   container.innerHTML = allIssuesView.render()
-  allIssuesView.loadIssues(filters)
+  allIssuesView.loadIssues(filters).catch(err => logger.error('[AllIssues] loadIssues failed:', err))
 }
 
 /**
@@ -938,7 +1107,7 @@ async function switchToRoadmapView(filters = {}) {
       state.dbInitialized = true
     } catch (error) {
       logger.error('[DB] Failed to initialize:', error)
-      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return
     }
@@ -952,7 +1121,7 @@ async function switchToRoadmapView(filters = {}) {
 
   const roadmapView = new RoadmapView(state.client, state.jiraDomain, switchToBoardView)
   container.innerHTML = roadmapView.render()
-  roadmapView.loadRoadmap(filters)
+  roadmapView.loadRoadmap(filters).catch(err => logger.error('[Roadmap] loadRoadmap failed:', err))
 }
 
 async function switchToSprintVelocityView(filters = {}) {
@@ -973,7 +1142,7 @@ async function switchToSprintVelocityView(filters = {}) {
       state.dbInitialized = true
     } catch (error) {
       logger.error('[DB] Failed to initialize:', error)
-      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return
     }
@@ -1008,7 +1177,7 @@ async function switchToWorkloadView(filters = {}) {
       state.dbInitialized = true
     } catch (error) {
       logger.error('[DB] Failed to initialize:', error)
-      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return
     }
@@ -1046,7 +1215,7 @@ async function switchToAgingView(filters = {}) {
       state.dbInitialized = true
     } catch (error) {
       logger.error('[DB] Failed to initialize:', error)
-      alert(`Failed to initialize database: ${error.message}. Please try again.`)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
       switchToBoardView()
       return
     }
@@ -1063,6 +1232,79 @@ async function switchToAgingView(filters = {}) {
   await agingView.load(filters.boardId, filters.sprintId)
 }
 
+async function switchToReleasesView(filters = {}) {
+  cleanupCurrentView()
+  state.currentView = 'releases'
+  updateViewToggle()
+
+  navigate(ROUTES.RELEASES)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (container) {
+    container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading release progress...</p></div>'
+  }
+
+  const releasesView = new ReleaseProgressView(state.client, state.jiraDomain, switchToBoardView)
+  state.currentViewInstance = releasesView
+  container.innerHTML = releasesView.render()
+  await releasesView.load(filters.projectKey || null)
+}
+
+/**
+ * Switch to Dashboard view
+ */
+async function switchToDashboardView() {
+  cleanupCurrentView()
+  state.currentView = 'dashboard'
+  updateViewToggle()
+
+  navigate(ROUTES.DASHBOARD)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (container) {
+    container.innerHTML = '<div class="loading-board"><div class="spinner"></div><p>Loading dashboard...</p></div>'
+  }
+
+  const dashboardView = new DashboardHomeView(state.client, state.jiraDomain, switchToBoardView)
+  state.currentViewInstance = dashboardView
+  container.innerHTML = dashboardView.render()
+  dashboardView.load().catch(err => logger.error('[Dashboard] load failed:', err))
+}
+
 /**
  * Update view toggle buttons
  */
@@ -1073,6 +1315,8 @@ function updateViewToggle() {
   const velocityBtn = document.getElementById('velocity-view-btn')
   const workloadBtn = document.getElementById('workload-view-btn')
   const agingBtn = document.getElementById('aging-view-btn')
+  const releasesBtn = document.getElementById('releases-view-btn')
+  const dashboardBtn = document.getElementById('dashboard-view-btn')
 
   if (boardBtn) boardBtn.classList.toggle('active', state.currentView === 'board')
   if (allIssuesBtn) allIssuesBtn.classList.toggle('active', state.currentView === 'all-issues')
@@ -1080,4 +1324,6 @@ function updateViewToggle() {
   if (velocityBtn) velocityBtn.classList.toggle('active', state.currentView === 'velocity')
   if (workloadBtn) workloadBtn.classList.toggle('active', state.currentView === 'workload')
   if (agingBtn) agingBtn.classList.toggle('active', state.currentView === 'aging')
+  if (releasesBtn) releasesBtn.classList.toggle('active', state.currentView === 'releases')
+  if (dashboardBtn) dashboardBtn.classList.toggle('active', state.currentView === 'dashboard')
 }
