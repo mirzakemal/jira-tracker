@@ -124,16 +124,17 @@ export const SyncStatusStyles = `
   .sync-button {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
+    gap: 4px;
+    padding: 6px 12px;
     border: none;
     background: var(--primary);
     color: white;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     transition: all 0.2s ease;
+    white-space: nowrap;
   }
 
   .sync-button:hover:not(:disabled) {
@@ -158,10 +159,11 @@ export const SyncStatusStyles = `
 
   .sync-info {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 8px;
     font-size: 12px;
     color: var(--text-secondary);
+    white-space: nowrap;
   }
 
   .sync-count {

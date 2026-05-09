@@ -452,7 +452,6 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
           </div>
         </div>
         <div class="sidebar-footer">
-          <div id="sync-status-container"></div>
           <button class="sidebar-collapse-btn" id="sidebar-collapse-btn">
             <span>◀</span>
             <span class="nav-item-label">Collapse</span>
@@ -467,6 +466,7 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
             </span>
           </div>
           <div class="top-bar-right">
+            <div id="sync-status-container"></div>
             <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
               🔄 Refresh
             </button>

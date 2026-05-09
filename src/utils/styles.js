@@ -534,8 +534,7 @@ export const panelBaseStyles = `
   .sync-status {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
+    gap: 10px;
   }
 `
 
