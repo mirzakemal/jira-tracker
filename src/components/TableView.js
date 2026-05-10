@@ -11,12 +11,16 @@ export class TableView {
   constructor(issues, onIssueClick, options = {}) {
     this.issues = issues || [];
     this.onIssueClick = onIssueClick;
-    this.columns = options.columns || this.getDefaultColumns();
+    this.columns = options.columns || this.loadSavedColumns() || this.getDefaultColumns();
     this.sortField = options.sortField || 'updated_at';
     this.sortDirection = options.sortDirection || 'desc';
     this.jiraDomain = options.jiraDomain || '';
     this.issueTags = options.issueTags || {};
     this.onTagsChange = options.onTagsChange || null;
+    this.page = 0;
+    this.pageSize = 50;
+    this._sortedCache = null;
+    this._sortedCacheKey = '';
   }
 
   /**
@@ -24,6 +28,23 @@ export class TableView {
    */
   getDefaultColumns() {
     return ['key', 'issue_type', 'tags', 'summary', 'status', 'priority', 'assignee_name', 'code_reviewer_1_name', 'code_reviewer_2_name', 'fix_version'];
+  }
+
+  loadSavedColumns() {
+    try {
+      const saved = localStorage.getItem('jira-planner-columns');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  saveColumns(columns) {
+    try {
+      localStorage.setItem('jira-planner-columns', JSON.stringify(columns));
+    } catch {
+      // localStorage might be full or unavailable
+    }
   }
 
   /**
@@ -63,11 +84,30 @@ export class TableView {
   }
 
   /**
-   * Update sort
+   * Update issues (invalidates cache)
+   */
+  setIssues(issues) {
+    this.issues = issues || [];
+    this._sortedCache = null;
+    this.page = 0;
+  }
+
+  /**
+   * Update sort (invalidates cache and resets page)
    */
   setSort(field, direction) {
     this.sortField = field;
     this.sortDirection = direction;
+    this._sortedCache = null;
+    this.page = 0;
+    this.refresh();
+  }
+
+  /**
+   * Go to a specific page
+   */
+  setPage(page) {
+    this.page = Math.max(0, page);
     this.refresh();
   }
 
@@ -77,7 +117,13 @@ export class TableView {
   getSortedIssues() {
     if (!this.sortField) return this.issues;
 
-    return [...this.issues].sort((a, b) => {
+    // Cache key based on issue count + sort params
+    const cacheKey = `${this.issues.length}|${this.sortField}|${this.sortDirection}`;
+    if (this._sortedCache && this._sortedCacheKey === cacheKey) {
+      return this._sortedCache;
+    }
+
+    const sorted = [...this.issues].sort((a, b) => {
       let aVal = a[this.sortField];
       let bVal = b[this.sortField];
 
@@ -163,6 +209,10 @@ export class TableView {
 
       return this.sortDirection === 'asc' ? comparison : -comparison;
     });
+
+    this._sortedCache = sorted;
+    this._sortedCacheKey = cacheKey;
+    return sorted;
   }
 
   /**
@@ -174,13 +224,23 @@ export class TableView {
     }
 
     const sortedIssues = this.getSortedIssues();
+    const totalPages = Math.ceil(sortedIssues.length / this.pageSize);
+    const safePage = Math.min(this.page, totalPages - 1);
+    const start = safePage * this.pageSize;
+    const paginatedIssues = sortedIssues.slice(start, start + this.pageSize);
     const availableColumns = this.getAvailableColumns();
+
+    // Column labels for header mapping
+    const colLabels = {};
+    for (const c of availableColumns) {
+      colLabels[c.id] = c.label;
+    }
 
     return `
       <div class="table-view" id="table-view">
         <div class="table-header">
           <div class="table-title">
-            ${this.issues.length} issue${this.issues.length !== 1 ? 's' : ''}
+            Showing ${start + 1}–${Math.min(start + this.pageSize, sortedIssues.length)} of ${sortedIssues.length} issue${sortedIssues.length !== 1 ? 's' : ''}
           </div>
           <button class="customize-columns-btn" id="customize-columns-btn">
             Customize Columns
@@ -213,10 +273,20 @@ export class TableView {
               </tr>
             </thead>
             <tbody>
-              ${sortedIssues.map(issue => this.renderRow(issue)).join('')}
+              ${paginatedIssues.map(issue => this.renderRow(issue)).join('')}
             </tbody>
           </table>
         </div>
+
+        ${totalPages > 1 ? `
+        <div class="table-pagination">
+          <button class="pagination-btn" id="page-first" ${safePage === 0 ? 'disabled' : ''} title="First page">⏮</button>
+          <button class="pagination-btn" id="page-prev" ${safePage === 0 ? 'disabled' : ''} title="Previous page">◀</button>
+          <span class="pagination-info">Page ${safePage + 1} of ${totalPages}</span>
+          <button class="pagination-btn" id="page-next" ${safePage >= totalPages - 1 ? 'disabled' : ''} title="Next page">▶</button>
+          <button class="pagination-btn" id="page-last" ${safePage >= totalPages - 1 ? 'disabled' : ''} title="Last page">⏭</button>
+        </div>
+        ` : ''}
 
         <div class="column-customizer" id="column-customizer" style="display: none;">
           <div class="column-customizer-content">
@@ -394,6 +464,7 @@ export class TableView {
 
         if (selectedColumns.length > 0) {
           this.setColumns(selectedColumns);
+          this.saveColumns(selectedColumns);
           this.refresh();
         }
       }
@@ -434,6 +505,15 @@ export class TableView {
       });
     });
 
+    // Pagination controls
+    document.getElementById('page-first')?.addEventListener('click', () => this.setPage(0));
+    document.getElementById('page-prev')?.addEventListener('click', () => this.setPage(this.page - 1));
+    document.getElementById('page-next')?.addEventListener('click', () => this.setPage(this.page + 1));
+    document.getElementById('page-last')?.addEventListener('click', () => {
+      const totalPages = Math.ceil(this.getSortedIssues().length / this.pageSize);
+      this.setPage(totalPages - 1);
+    });
+
     // Tags cell click handling - open tags editor modal
     const tagsCells = document.querySelectorAll('.tags-cell');
     tagsCells.forEach(cell => {
@@ -451,6 +531,10 @@ export class TableView {
   async openTagsEditor(issueKey) {
     const issue = this.issues.find(i => i.key === issueKey);
     if (!issue) return;
+
+    // Guard against duplicate modals
+    const existingModal = document.getElementById('tags-editor-modal');
+    if (existingModal) existingModal.remove();
 
     const tags = this.issueTags[issueKey] || [];
     const knownTags = await this.getAllKnownTags();
@@ -544,11 +628,9 @@ export class TableView {
         const { addTag, getTags } = await import('../db/queries.js');
 
         await addTag(issueKey, tagName);
-        // Update tags for this specific issue (don't refresh table while modal is open)
         const newTags = await getTags(issueKey);
         this.issueTags[issueKey] = newTags;
 
-        // Update the modal UI
         if (existingContainer) {
           existingContainer.innerHTML = newTags.length === 0
             ? '<p class="no-tags">No tags yet</p>'
@@ -558,29 +640,6 @@ export class TableView {
                   <button class="tag-remove" data-tag="${escapeHtml(tag)}">&times;</button>
                 </span>
               `).join('');
-
-          // Re-bind remove events for newly created buttons
-          existingContainer.querySelectorAll('.tag-remove').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-              const tag = btn.dataset.tag;
-              const { removeTag, getTags } = await import('../db/queries.js');
-              await removeTag(issueKey, tag);
-
-              // Refresh tags for this specific issue
-              const updatedTags = await getTags(issueKey);
-              this.issueTags[issueKey] = updatedTags;
-
-              // Update modal UI
-              existingContainer.innerHTML = updatedTags.length === 0
-                ? '<p class="no-tags">No tags yet</p>'
-                : updatedTags.map(t => `
-                    <span class="tag-badge" data-tag="${escapeHtml(t)}">
-                      ${escapeHtml(t)}
-                      <button class="tag-remove" data-tag="${escapeHtml(t)}">&times;</button>
-                    </span>
-                  `).join('');
-            });
-          });
         }
 
         if (input) input.value = '';
@@ -595,31 +654,30 @@ export class TableView {
       }
     });
 
-    // Bind remove events for existing tags
-    existingContainer?.querySelectorAll('.tag-remove').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const tag = btn.dataset.tag;
-        const { removeTag, getTags } = await import('../db/queries.js');
+    // Use event delegation for tag-remove buttons (survives innerHTML changes)
+    existingContainer?.addEventListener('click', async (e) => {
+      const removeBtn = e.target.closest('.tag-remove');
+      if (!removeBtn) return;
 
-        try {
-          await removeTag(issueKey, tag);
-          // Refresh tags for this specific issue (don't refresh table while modal is open)
-          const updatedTags = await getTags(issueKey);
-          this.issueTags[issueKey] = updatedTags;
+      const tag = removeBtn.dataset.tag;
+      const { removeTag, getTags } = await import('../db/queries.js');
 
-          // Update modal UI
-          existingContainer.innerHTML = updatedTags.length === 0
-            ? '<p class="no-tags">No tags yet</p>'
-            : updatedTags.map(t => `
-                <span class="tag-badge" data-tag="${escapeHtml(t)}">
-                  ${escapeHtml(t)}
-                  <button class="tag-remove" data-tag="${escapeHtml(t)}">&times;</button>
-                </span>
-              `).join('');
-        } catch (error) {
-          logger.error('[TableView] Failed to remove tag:', error);
-        }
-      });
+      try {
+        await removeTag(issueKey, tag);
+        const updatedTags = await getTags(issueKey);
+        this.issueTags[issueKey] = updatedTags;
+
+        existingContainer.innerHTML = updatedTags.length === 0
+          ? '<p class="no-tags">No tags yet</p>'
+          : updatedTags.map(t => `
+              <span class="tag-badge" data-tag="${escapeHtml(t)}">
+                ${escapeHtml(t)}
+                <button class="tag-remove" data-tag="${escapeHtml(t)}">&times;</button>
+              </span>
+            `).join('');
+      } catch (error) {
+        logger.error('[TableView] Failed to remove tag:', error);
+      }
     });
   }
 
@@ -872,5 +930,42 @@ export const TableViewStyles = `
     color: var(--text-secondary);
     font-style: italic;
     margin-left: auto;
+  }
+
+  .table-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .pagination-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s ease;
+  }
+
+  .pagination-btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  .pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .pagination-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 100px;
+    text-align: center;
   }
 `;

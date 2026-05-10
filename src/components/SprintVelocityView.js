@@ -55,7 +55,10 @@ export class SprintVelocityView {
     }
 
     const { sprints, summary } = this.data;
-    const recentSprints = sprints.slice(-5);
+    const recentSprints = sprints
+      .filter(s => s.start_date)
+      .slice(0, 8)
+      .reverse();
     const maxTotal = Math.max(...recentSprints.map(s => s.total), 1);
 
     return `
@@ -355,7 +358,7 @@ export class SprintVelocityView {
 
 export const SprintVelocityViewStyles = `
   .velocity-dashboard {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
   }
 

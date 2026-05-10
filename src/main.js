@@ -1,6 +1,7 @@
 import './style.css'
 import logger from './utils/logger.js';
 import { escapeHtml } from './utils/html.js';
+import { showError } from './utils/dom.js';
 import { SettingsPanel } from './components/SettingsPanel.js'
 import { BoardSelector } from './components/BoardSelector.js'
 import { IssueBoard } from './components/IssueBoard.js'
@@ -43,11 +44,26 @@ const state = {
   currentView: 'board', // 'board' or 'all-issues'
   jiraDomain: null,
   filters: {}, // Store current filters
-  currentViewInstance: null // Track active view instance for cleanup
+  currentViewInstance: null, // Track active view instance for cleanup
+  boardSelector: null // Shared BoardSelector instance
 }
 
 // Shared SyncStatus instance — created once, reused
 let syncStatusComponent = null
+
+function filtersEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a), keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    const va = a[k], vb = b[k];
+    if (Array.isArray(va)) {
+      if (!Array.isArray(vb) || va.length !== vb.length || va.some((v, i) => v !== vb[i])) return false;
+    } else if (va !== vb) return false;
+  }
+  return true;
+}
 
 // Runtime logger config from URL params (?log=debug)
 const urlParams = new URLSearchParams(window.location.search)
@@ -156,7 +172,7 @@ function handleRouteChange({ route, params }) {
     } else {
       // Already in roadmap view, apply filters if they changed
       if (state.currentViewInstance && filters) {
-        const filtersChanged = JSON.stringify(state.currentViewInstance.filters) !== JSON.stringify(filters)
+        const filtersChanged = !filtersEqual(state.currentViewInstance.filters, filters)
         if (filtersChanged) {
           state.currentViewInstance.filters = filters
           state.currentViewInstance.loadRoadmap().catch(err => logger.error('[Roadmap] loadRoadmap failed:', err))
@@ -188,7 +204,7 @@ function handleRouteChange({ route, params }) {
       // Already in all-issues view, apply filters if they changed
       const container = document.getElementById('all-issues-view')
       if (container && state.currentViewInstance) {
-        const filtersChanged = JSON.stringify(state.currentViewInstance.filters) !== JSON.stringify(filters)
+        const filtersChanged = !filtersEqual(state.currentViewInstance.filters, filters)
         if (filtersChanged) {
           // Use the debounced loadIssues for smooth filtering
           state.currentViewInstance.filters = filters
@@ -205,10 +221,14 @@ function handleRouteChange({ route, params }) {
       // Clean up previous view
       cleanupCurrentView()
 
-      // Show board selector
+      // Show board selector and ensure it's rendered
       const boardSelectorContainer = document.getElementById('board-selector-container')
       if (boardSelectorContainer) {
         boardSelectorContainer.style.display = 'block'
+        if (state.boardSelector && !boardSelectorContainer.querySelector('.board-selector')) {
+          boardSelectorContainer.innerHTML = state.boardSelector.render()
+          state.boardSelector.bindEvents(state.client)
+        }
       }
 
       loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
@@ -528,29 +548,39 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
 
   // Initialize board selector (always, but only visible on board view)
   const boardSelector = new BoardSelector(handleSelectionChange)
+  state.boardSelector = boardSelector
   const selectorContainer = document.getElementById('board-selector-container')
 
-  if (initialView === 'board') {
+  // Hide selector container if initial view is not board
+  if (initialView !== 'board' && selectorContainer) {
+    selectorContainer.style.display = 'none'
+  }
+
+  // Always render the initial (loading) HTML so the container isn't empty
+  if (selectorContainer) {
     selectorContainer.innerHTML = boardSelector.render()
-    boardSelector.load(state.client).then(() => {
+  }
+
+  boardSelector.load(state.client).then(() => {
+    if (selectorContainer) {
       selectorContainer.innerHTML = boardSelector.render()
       boardSelector.bindEvents(state.client)
-      const savedSelection = loadSelection()
-      if (savedSelection && state.board) {
-        const savedBoard = boardSelector.boards.find(b => b.id === savedSelection.boardId)
-        if (savedBoard) {
-          boardSelector.selectedBoard = savedBoard.id
-          const savedSprint = boardSelector.sprints.find(s => s.id === savedSelection.sprintId)
-          if (savedSprint) boardSelector.selectedSprint = savedSprint.id
-          boardSelector.refresh(state.client)
-        }
+    }
+    const savedSelection = loadSelection()
+    if (savedSelection && state.board) {
+      const savedBoard = boardSelector.boards.find(b => b.id === savedSelection.boardId)
+      if (savedBoard) {
+        boardSelector.selectedBoard = savedBoard.id
+        const savedSprint = boardSelector.sprints.find(s => s.id === savedSelection.sprintId)
+        if (savedSprint) boardSelector.selectedSprint = savedSprint.id
+        boardSelector.refresh(state.client)
       }
+    }
+    if (initialView === 'board') {
       loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
-      autoSync()
-    }).catch(err => logger.error('[BoardSelector] load failed:', err))
-  } else {
-    boardSelector.load(state.client).catch(err => logger.error('[BoardSelector] load failed:', err))
-  }
+    }
+    autoSync()
+  }).catch(err => logger.error('[BoardSelector] load failed:', err))
 
   // Render initial view content
   if (initialView === 'all-issues') {
@@ -909,6 +939,10 @@ async function autoSync() {
     status.changeCount = syncResult.changeCount || 0
     updateSyncStatusUI(false, status)
 
+    if (syncResult.warnings && syncResult.warnings.length > 0) {
+      logger.warn('[AutoSync] Completed with warnings:', syncResult.warnings);
+    }
+
     logger.info('[AutoSync] Background sync completed')
   } catch (error) {
     logger.error('[AutoSync] Background sync failed:', error.message)
@@ -943,6 +977,10 @@ async function handleSyncRequest() {
       const status = await getSyncStatus()
       status.changeCount = syncResult.changeCount || 0
       updateSyncStatusUI(false, status)
+
+      if (syncResult.warnings && syncResult.warnings.length > 0) {
+        showError(`Sync completed with ${syncResult.warnings.length} warning(s): ${syncResult.warnings[0]}`)
+      }
 
       // Reload issues if on all-issues view
       if (state.currentView === 'all-issues' && window.currentAllIssuesView) {
@@ -982,10 +1020,14 @@ function switchToBoardView() {
   // Navigate to board route
   navigate(ROUTES.BOARD)
 
-  // Show board selector
+  // Show board selector and ensure it's rendered
   const boardSelectorContainer = document.getElementById('board-selector-container')
   if (boardSelectorContainer) {
     boardSelectorContainer.style.display = 'block'
+    if (state.boardSelector && !boardSelectorContainer.querySelector('.board-selector')) {
+      boardSelectorContainer.innerHTML = state.boardSelector.render()
+      state.boardSelector.bindEvents(state.client)
+    }
   }
 
   // Clear container before loading

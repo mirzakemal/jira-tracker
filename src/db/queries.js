@@ -11,21 +11,10 @@ import {
   get,
   put,
   del,
-  getDatabase
+  getDatabase,
+  STORE_NAMES as STORES
 } from './indexeddb.js';
-
-const STORES = {
-  PROJECTS: 'projects',
-  BOARDS: 'boards',
-  SPRINTS: 'sprints',
-  ISSUES: 'issues',
-  USERS: 'users',
-  TAGS: 'tags',
-  VIEWS: 'views',
-  METADATA: 'metadata',
-  CHANGELOG: 'changelog',
-  ISSUELINKS: 'issuelinks'
-};
+import { isDoneStatus, isDoneCategory } from '../utils/status.js';
 
 // Cache for filter options to avoid repeated DB queries
 let filterOptionsCache = {
@@ -39,7 +28,24 @@ let filterOptionsCache = {
   timestamp: 0
 };
 
+// Shared issues snapshot for filter option generation (avoids ~6 redundant getAll calls)
+let _issuesSnapshot = null;
+let _issuesSnapshotTs = 0;
+
 const CACHE_TTL = 60000; // 1 minute cache TTL
+
+/**
+ * Get cached issues snapshot for filter option extraction
+ */
+async function getCachedIssues() {
+  if (_issuesSnapshot && (Date.now() - _issuesSnapshotTs) < CACHE_TTL) {
+    return _issuesSnapshot;
+  }
+  await initDatabase();
+  _issuesSnapshot = await getAll(STORES.ISSUES);
+  _issuesSnapshotTs = Date.now();
+  return _issuesSnapshot;
+}
 
 /**
  * Check if cache is still valid
@@ -63,6 +69,8 @@ export function invalidateFilterCache() {
     priorities: null,
     timestamp: 0
   };
+  _issuesSnapshot = null;
+  _issuesSnapshotTs = 0;
 }
 
 /**
@@ -177,37 +185,66 @@ export async function getAllIssues(filters = {}) {
     if (filters.updatedAfter) {
       if (!issue.updated_at || issue.updated_at < filters.updatedAfter) return false;
     }
+    if (filters.createdAfter) {
+      if (!issue.created_at || issue.created_at < filters.createdAfter) return false;
+    }
+    if (filters.createdBefore) {
+      if (!issue.created_at || issue.created_at > filters.createdBefore + 'T23:59:59Z') return false;
+    }
+    if (filters.resolvedAfter) {
+      if (!issue.resolved_at || issue.resolved_at < filters.resolvedAfter) return false;
+    }
+    if (filters.resolvedBefore) {
+      if (!issue.resolved_at || issue.resolved_at > filters.resolvedBefore + 'T23:59:59Z') return false;
+    }
+
+    // Sprint state filter (active/closed/future)
+    if (filters.sprintState && Array.isArray(filters.sprintState) && filters.sprintState.length > 0) {
+      if (!issue.sprint_state || !filters.sprintState.includes(issue.sprint_state)) return false;
+    }
+
+    // Tag presence filter
+    if (filters.tagPresence !== undefined && filters.tagPresence !== null) {
+      if (filters.tagPresence === 'has') return false; // handled later after tags loaded
+      if (filters.tagPresence === 'none') return false; // handled later after tags loaded
+    }
 
     // To Be Tested filter
     if (filters.toBeTestedByDate) {
-      const needsTesting = !['Done', 'Closed', 'Resolved'].includes(issue.status);
+      const needsTesting = !isDoneStatus(issue.status);
       const updatedBeforeDate = issue.updated_at && issue.updated_at <= filters.toBeTestedByDate + 'T23:59:59Z';
       if (!needsTesting || !updatedBeforeDate) return false;
     }
 
-    // Search query - text search on key and summary
+    // Search query - text search on key, summary, and description
     if (filters.searchQuery) {
       const query = filters.searchQuery.toLowerCase();
       const match = (issue.summary?.toLowerCase().includes(query) ||
-                     issue.key?.toLowerCase().includes(query));
+                     issue.key?.toLowerCase().includes(query) ||
+                     issue.description?.toLowerCase().includes(query));
       if (!match) return false;
     }
 
     return true;
   });
 
-  // Load users once for enrichment
-  const users = await getAll(STORES.USERS);
+  // Load users once for enrichment (uses filter options cache)
+  const users = await getAllUsers();
   const userMap = new Map(users.map(u => [u.account_id, u.display_name]));
 
-  // Enrich issues with user names
+  // Load sprints for state enrichment
+  const allSprints = await getAll(STORES.SPRINTS);
+  const sprintStateMap = new Map(allSprints.map(s => [s.id, s.state || 'unknown']));
+
+  // Enrich issues with user names and sprint state
   const enrichedIssues = filteredIssues.map(issue => ({
     ...issue,
     assignee_name: issue.assignee_id ? (userMap.get(issue.assignee_id) || 'Unassigned') : null,
     reporter_name: issue.reporter_id ? (userMap.get(issue.reporter_id) || 'Unknown') : null,
     qa_tester_name: issue.qa_tester_id ? (userMap.get(issue.qa_tester_id) || null) : null,
     code_reviewer_1_name: issue.code_reviewer_1_id ? (userMap.get(issue.code_reviewer_1_id) || null) : null,
-    code_reviewer_2_name: issue.code_reviewer_2_id ? (userMap.get(issue.code_reviewer_2_id) || null) : null
+    code_reviewer_2_name: issue.code_reviewer_2_id ? (userMap.get(issue.code_reviewer_2_id) || null) : null,
+    sprint_state: issue.sprint_id ? (sprintStateMap.get(issue.sprint_id) || 'unknown') : null
   }));
 
   // Load all tags in a single query
@@ -232,6 +269,11 @@ export async function getAllIssues(filters = {}) {
       // Legacy single tag filter
       if (!tags.includes(filters.tag)) return false;
     }
+
+    // Tag presence filter
+    if (filters.tagPresence === 'has' && tags.length === 0) return false;
+    if (filters.tagPresence === 'none' && tags.length > 0) return false;
+
     return true;
   });
 
@@ -308,8 +350,7 @@ export async function getFixVersions(projectKey = null) {
     return filterOptionsCache.fixVersions;
   }
 
-  await initDatabase();
-  const issues = await getAll(STORES.ISSUES);
+  const issues = await getCachedIssues();
   const versions = [...new Set(
     issues
       .filter(i => i.fix_version && (!projectKey || i.project_key === projectKey))
@@ -329,8 +370,7 @@ export async function getCustomers(projectKey = null) {
     return filterOptionsCache.customers;
   }
 
-  await initDatabase();
-  const issues = await getAll(STORES.ISSUES);
+  const issues = await getCachedIssues();
   const allCustomers = [];
 
   issues.forEach(issue => {
@@ -355,8 +395,7 @@ export async function getProducts(projectKey = null) {
     return filterOptionsCache.products;
   }
 
-  await initDatabase();
-  const issues = await getAll(STORES.ISSUES);
+  const issues = await getCachedIssues();
   const products = [...new Set(
     issues
       .filter(i => i.product && (!projectKey || i.project_key === projectKey))
@@ -376,8 +415,7 @@ export async function getStatuses() {
     return filterOptionsCache.statuses;
   }
 
-  await initDatabase();
-  const issues = await getAll(STORES.ISSUES);
+  const issues = await getCachedIssues();
   const statuses = [...new Set(
     issues
       .filter(i => i.status)
@@ -397,8 +435,7 @@ export async function getIssueTypes(projectKey = null) {
     return filterOptionsCache.issueTypes;
   }
 
-  await initDatabase();
-  const issues = await getAll(STORES.ISSUES);
+  const issues = await getCachedIssues();
   const types = [...new Set(
     issues
       .filter(i => i.issue_type && (!projectKey || i.project_key === projectKey))
@@ -418,8 +455,7 @@ export async function getPriorities() {
     return filterOptionsCache.priorities;
   }
 
-  await initDatabase();
-  const issues = await getAll(STORES.ISSUES);
+  const issues = await getCachedIssues();
   const priorities = [...new Set(
     issues
       .filter(i => i.priority)
@@ -584,11 +620,7 @@ export async function getIssueAging(filters = {}) {
     issues = issues.filter(i => i.sprint_id === filters.sprintId);
   }
 
-  const isStatusDone = (sc) => {
-    const cat = (sc || '').toLowerCase();
-    return cat.includes('done') || cat.includes('closed') || cat.includes('resolved');
-  };
-  issues = issues.filter(i => !isStatusDone(i.status_category));
+  issues = issues.filter(i => !isDoneCategory(i.status_category));
 
   const now = new Date();
   const aged = issues.map(issue => {
@@ -1138,10 +1170,7 @@ export async function getSprintVelocity(boardId = null) {
     .map(sprint => {
       const sprintIssues = issues.filter(i => i.sprint_id === sprint.id);
       const total = sprintIssues.length;
-      const completed = sprintIssues.filter(i => {
-        const sc = (i.status_category || '').toLowerCase();
-        return sc.includes('done') || sc.includes('closed') || sc.includes('resolved');
-      }).length;
+      const completed = sprintIssues.filter(i => isDoneCategory(i.status_category)).length;
 
       // Completion rate as percentage
       const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -1150,14 +1179,12 @@ export async function getSprintVelocity(boardId = null) {
       const assigneeMap = new Map();
       sprintIssues.forEach(i => {
         const name = i.assignee_id ? (userMap.get(i.assignee_id) || i.assignee_name || 'Unassigned') : 'Unassigned';
-        const done = (i.status_category || '').toLowerCase();
-        const isDone = done.includes('done') || done.includes('closed') || done.includes('resolved');
         if (!assigneeMap.has(name)) {
           assigneeMap.set(name, { total: 0, completed: 0 });
         }
         const entry = assigneeMap.get(name);
         entry.total++;
-        if (isDone) entry.completed++;
+        if (isDoneCategory(i.status_category)) entry.completed++;
       });
 
       const assignees = Array.from(assigneeMap.entries())
@@ -1275,11 +1302,6 @@ export async function getReleaseProgress(filters = {}) {
     issues = issues.filter(i => i.project_key === filters.projectKey);
   }
 
-  const isStatusDone = (sc) => {
-    const cat = (sc || '').toLowerCase();
-    return cat.includes('done') || cat.includes('closed') || cat.includes('resolved');
-  };
-
   const versions = new Map();
   issues.forEach(issue => {
     const version = issue.fix_version || 'Unversioned';
@@ -1296,7 +1318,7 @@ export async function getReleaseProgress(filters = {}) {
     const v = versions.get(version);
     v.total++;
     v.issues.push(issue);
-    if (isStatusDone(issue.status_category)) {
+    if (isDoneCategory(issue.status_category)) {
       v.completed++;
     } else {
       v.remaining++;
@@ -1560,144 +1582,236 @@ export async function getDependencyChain(issueKey, direction = 'outward', option
 }
 
 /**
+ * Dashboard throughput: weekly created vs resolved over N weeks
+ */
+export async function getDashboardThroughput(weeks = 8) {
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+  const now = new Date();
+  const startOfWeek = (d) => {
+    const dt = new Date(d);
+    dt.setHours(0, 0, 0, 0);
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    return dt;
+  };
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - weeks * 7);
+
+  console.log('[Throughput] Total issues in DB:', issues.length);
+  console.log('[Throughput] Cutoff date (last', weeks, 'weeks):', cutoff.toISOString());
+
+  const withCreatedAt = issues.filter(i => i.created_at);
+  const withResolvedAt = issues.filter(i => i.resolved_at);
+  console.log('[Throughput] Issues with created_at:', withCreatedAt.length);
+  console.log('[Throughput] Issues with resolved_at:', withResolvedAt.length);
+
+  const createdInRange = withCreatedAt.filter(i => new Date(i.created_at) >= cutoff);
+  const resolvedInRange = withResolvedAt.filter(i => new Date(i.resolved_at) >= cutoff);
+  console.log('[Throughput] Created in range:', createdInRange.length);
+  console.log('[Throughput] Resolved in range:', resolvedInRange.length);
+
+  if (issues.length > 0) {
+    const sample = issues.slice(0, 3);
+    console.log('[Throughput] Sample issue dates:', sample.map(i => ({
+      key: i.key,
+      created_at: i.created_at,
+      resolved_at: i.resolved_at
+    })));
+  }
+
+  const buckets = [];
+  for (let i = 0; i < weeks; i++) {
+    const wStart = new Date(cutoff);
+    wStart.setDate(wStart.getDate() + i * 7);
+    buckets.push({ start: wStart, created: 0, resolved: 0 });
+  }
+
+  for (const issue of issues) {
+    const created = issue.created_at ? new Date(issue.created_at) : null;
+    const resolved = issue.resolved_at ? new Date(issue.resolved_at) : null;
+    if (created && created >= cutoff) {
+      const wk = startOfWeek(created);
+      const idx = buckets.findIndex(b => b.start.getTime() === wk.getTime());
+      if (idx >= 0) buckets[idx].created++;
+    }
+    if (resolved && resolved >= cutoff) {
+      const wk = startOfWeek(resolved);
+      const idx = buckets.findIndex(b => b.start.getTime() === wk.getTime());
+      if (idx >= 0) buckets[idx].resolved++;
+    }
+  }
+
+  const result = buckets.map(b => ({
+    week: b.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    created: b.created,
+    resolved: b.resolved
+  }));
+  console.log('[Throughput] Final buckets:', result);
+  return result;
+}
+
+/**
+ * Dashboard cycle time: median days to resolve by issue type
+ */
+export async function getDashboardCycleTime() {
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+  const byType = {};
+  for (const issue of issues) {
+    if (!issue.resolved_at || !issue.created_at) continue;
+    const days = Math.max(1, Math.round((new Date(issue.resolved_at) - new Date(issue.created_at)) / 86400000));
+    const type = issue.issue_type || 'Other';
+    if (!byType[type]) byType[type] = [];
+    byType[type].push(days);
+  }
+  return Object.entries(byType).map(([type, days]) => {
+    days.sort((a, b) => a - b);
+    const median = days[Math.floor(days.length / 2)];
+    return { type, medianDays: median, count: days.length };
+  }).sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Dashboard status distribution: count by category
+ */
+export async function getDashboardStatusDistribution() {
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+  let todo = 0, inProgress = 0, done = 0;
+  for (const issue of issues) {
+    const cat = (issue.status_category || '').toLowerCase();
+    if (cat.includes('done')) done++;
+    else if (cat.includes('progress')) inProgress++;
+    else todo++;
+  }
+  return { todo, inProgress, done, total: issues.length };
+}
+
+/**
+ * Dashboard backlog health: unscheduled issues by age bucket
+ */
+export async function getDashboardBacklogHealth() {
+  await initDatabase();
+  const issues = await getAll(STORES.ISSUES);
+  const now = new Date();
+  let fresh = 0, aging = 0, stale = 0, ancient = 0;
+  const backlog = issues.filter(i => !i.sprint_id && !isDoneCategory(i.status_category));
+  for (const issue of backlog) {
+    const created = issue.created_at ? new Date(issue.created_at) : now;
+    const days = Math.floor((now - created) / 86400000);
+    if (days <= 7) fresh++;
+    else if (days <= 30) aging++;
+    else if (days <= 90) stale++;
+    else ancient++;
+  }
+  return { total: backlog.length, fresh, aging, stale, ancient };
+}
+
+/**
  * Dashboard aggregate data
  * Returns velocity trend, at-risk releases, aging outliers, and workload imbalance
  */
 export async function getDashboardData() {
-  const [issues, sprints, users] = await Promise.all([
-    getAll(STORES.ISSUES),
-    getAll(STORES.SPRINTS),
-    getAll(STORES.USERS)
+  const [velocityData, releaseData, agingData, workloadData, throughput, cycleTime, statusDist, backlogHealth] = await Promise.all([
+    getSprintVelocity(),
+    getReleaseProgress({}),
+    getIssueAging({}),
+    getTeamWorkload({}),
+    getDashboardThroughput(),
+    getDashboardCycleTime(),
+    getDashboardStatusDistribution(),
+    getDashboardBacklogHealth()
   ]);
 
-    // --- Velocity Trend: last 5 completed sprints ---
-    const now = new Date();
-    const completedSprints = sprints
-      .filter(s => s.end_date && new Date(s.end_date) < now)
-      .sort((a, b) => new Date(b.end_date) - new Date(a.end_date))
-      .slice(0, 5)
-      .reverse();
+  // --- Velocity Trend: last 8 completed sprints ---
+  const completedSprints = velocityData.sprints
+    .filter(s => s.state === 'closed' || (s.end_date && new Date(s.end_date) < new Date()))
+    .sort((a, b) => new Date(a.start_date || 0) - new Date(b.start_date || 0))
+    .slice(-8);
 
-    const velocityTrend = completedSprints.map(sprint => {
-      const sprintIssues = issues.filter(i => i.sprint_id === sprint.id);
-      const completed = sprintIssues.filter(i =>
-        i.status && ['done', 'closed', 'resolved'].includes(i.status.toLowerCase())
-      ).length;
-      return {
-        id: sprint.id,
-        name: sprint.name,
-        total: sprintIssues.length,
-        completed,
-        velocity: completed
-      };
-    });
+  const velocityTrend = completedSprints.map(s => ({
+    id: s.id,
+    name: s.name,
+    total: s.total,
+    completed: s.completed,
+    velocity: s.completed,
+    start_date: s.start_date || null,
+    end_date: s.end_date || null
+  }));
 
-    // --- At-Risk Releases: progress behind schedule ---
-    const fixVersionCounts = {};
-    for (const issue of issues) {
-      const fv = issue.fix_version;
-      if (fv) {
-        if (!fixVersionCounts[fv]) fixVersionCounts[fv] = { total: 0, completed: 0, targetDate: null };
-        fixVersionCounts[fv].total++;
-        if (issue.status && ['done', 'closed', 'resolved'].includes(issue.status.toLowerCase())) {
-          fixVersionCounts[fv].completed++;
-        }
+  // Trend indicator: compare last sprint vs average
+  let trend = 'stable';
+  if (velocityTrend.length >= 2) {
+    const last = velocityTrend[velocityTrend.length - 1].velocity;
+    const avg = velocityData.summary.averageVelocity;
+    if (avg > 0) {
+      const ratio = last / avg;
+      if (ratio > 1.15) trend = 'up';
+      else if (ratio < 0.85) trend = 'down';
+    }
+  }
+
+  // --- At-Risk Releases: top 5 sorted by risk ---
+  const riskOrder = { critical: 0, high: 1, medium: 2, unknown: 3, low: 4 };
+  const atRiskReleases = releaseData
+    .filter(r => r.name !== 'Unversioned' && r.total > 0)
+    .map(r => ({
+      name: r.name,
+      total: r.total,
+      completed: r.completed,
+      remaining: r.remaining,
+      progress: r.progress,
+      risk: r.risk,
+      targetDate: r.targetDate || null
+    }))
+    .sort((a, b) => (riskOrder[a.risk] ?? 4) - (riskOrder[b.risk] ?? 4) || a.progress - b.progress)
+    .slice(0, 5);
+
+  // --- Aging Outliers: top 5 issues stuck > 7 days ---
+  const agingOutliers = agingData
+    .filter(i => i.daysInStatus != null && i.daysInStatus > 7)
+    .slice(0, 5)
+    .map(i => ({
+      key: i.key,
+      summary: i.summary,
+      status: i.status,
+      daysInStatus: i.daysInStatus,
+      updatedAt: i.updated_at || i.created_at
+    }));
+
+  // --- Workload Imbalance with priority weighting ---
+  const priorityWeights = { highest: 4, high: 3, medium: 2, low: 1, lowest: 0.5 };
+  const people = workloadData.people.map(p => {
+    let weightedScore = 0;
+    for (const s of p.statuses) {
+      for (const issue of s.issues) {
+        weightedScore += priorityWeights[(issue.priority || '').toLowerCase()] || 1;
       }
     }
-    // Also check sprints for release target dates
-    const sprintByName = {};
-    for (const s of sprints) {
-      if (s.name) sprintByName[s.name] = s;
-    }
-
-    const atRiskReleases = [];
-    for (const [name, data] of Object.entries(fixVersionCounts)) {
-      const targetDate = sprintByName[name]?.end_date ? new Date(sprintByName[name].end_date) : null;
-      const progress = data.total > 0 ? data.completed / data.total : 0;
-      let risk = 'low';
-      let timePercent = 0;
-      if (targetDate && data.total > 0) {
-        const sprintWithName = completedSprints.find(s => s.name === name);
-        const startDate = sprintWithName?.start_date ? new Date(sprintWithName.start_date) : new Date(targetDate.getTime() - 14 * 86400000);
-        const totalMs = targetDate.getTime() - startDate.getTime();
-        const elapsedMs = Math.min(now.getTime() - startDate.getTime(), totalMs);
-        timePercent = totalMs > 0 ? elapsedMs / totalMs : 0;
-        const gap = timePercent - progress;
-        if (gap > 0.3) risk = 'high';
-        else if (gap > 0.15) risk = 'medium';
-      }
-      if (data.total > 0) {
-        atRiskReleases.push({
-          name,
-          total: data.total,
-          completed: data.completed,
-          remaining: data.total - data.completed,
-          progress: Math.round(progress * 100),
-          timePercent: Math.round(Math.min(timePercent, 1) * 100),
-          risk,
-          targetDate: targetDate?.toISOString().split('T')[0] || null
-        });
-      }
-    }
-    atRiskReleases.sort((a, b) => {
-      const riskOrder = { high: 0, medium: 1, low: 2 };
-      const r = riskOrder[a.risk] - riskOrder[b.risk];
-      if (r !== 0) return r;
-      return a.progress - b.progress;
-    }).slice(0, 5);
-
-    // --- Aging Outliers: top 5 issues stuck longest in current status ---
-    const doneStatuses = ['done', 'closed', 'resolved', 'complete', 'completed'];
-    const agingOutliers = issues
-      .filter(i => i.status && !doneStatuses.includes(i.status.trim().toLowerCase()) && i.sprint_id)
-      .map(issue => {
-        const updated = issue.updated_at ? new Date(issue.updated_at) : new Date(issue.created_at);
-        const daysInStatus = Math.floor((now - updated) / 86400000);
-        return {
-          key: issue.key,
-          summary: issue.summary,
-          status: issue.status,
-          daysInStatus: Math.max(daysInStatus, 1),
-          updatedAt: issue.updated_at || issue.created_at
-        };
-      })
-      .filter(i => i.daysInStatus > 0)
-      .sort((a, b) => b.daysInStatus - a.daysInStatus)
-      .slice(0, 5);
-
-    // --- Workload Imbalance ---
-    const activeIssues = issues.filter(i =>
-      i.assignee_id && i.status && !['done', 'closed', 'resolved'].includes(i.status.toLowerCase())
-    );
-    const workloadByPerson = {};
-    for (const issue of activeIssues) {
-      if (!workloadByPerson[issue.assignee_id]) {
-        workloadByPerson[issue.assignee_id] = 0;
-      }
-      workloadByPerson[issue.assignee_id]++;
-    }
-    const workloadList = Object.entries(workloadByPerson)
-      .map(([id, count]) => {
-        const user = users.find(u => u.account_id === id);
-        return {
-          id,
-          name: user?.display_name || id,
-          issueCount: count
-        };
-      })
-      .sort((a, b) => b.issueCount - a.issueCount);
-
-    const totalActive = workloadList.reduce((sum, w) => sum + w.issueCount, 0);
-    const avgWorkload = workloadList.length > 0 ? totalActive / workloadList.length : 0;
-
     return {
-      velocityTrend,
-      atRiskReleases,
-      agingOutliers,
-      workloadImbalance: {
-        people: workloadList,
-        totalActive,
-        average: Math.round(avgWorkload * 10) / 10
-      }
+      id: p.id,
+      name: p.name,
+      issueCount: p.total,
+      weightedScore: Math.round(weightedScore * 10) / 10
     };
+  }).sort((a, b) => b.weightedScore - a.weightedScore);
+
+  const totalActive = people.reduce((sum, w) => sum + w.issueCount, 0);
+  const avgWorkload = people.length > 0 ? totalActive / people.length : 0;
+
+  return {
+    velocityTrend,
+    trend,
+    atRiskReleases,
+    agingOutliers,
+    workloadImbalance: {
+      people,
+      totalActive,
+      average: Math.round(avgWorkload * 10) / 10
+    },
+    throughput,
+    cycleTime,
+    statusDist,
+    backlogHealth
+  };
 }

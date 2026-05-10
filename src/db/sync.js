@@ -6,35 +6,22 @@
 import logger from '../utils/logger.js';
 import {
   initDatabase,
-  put,
   putBulk,
-  get,
   getAll,
-  getAllFiltered,
   setMetadata,
   getMetadata,
-  clear
+  clear,
+  STORE_NAMES as STORES
 } from './indexeddb.js';
 
 import { CUSTOM_FIELDS, FIELD_PATTERNS } from '../jira-config.js';
-
-const STORES = {
-  PROJECTS: 'projects',
-  BOARDS: 'boards',
-  SPRINTS: 'sprints',
-  ISSUES: 'issues',
-  USERS: 'users',
-  TAGS: 'tags',
-  METADATA: 'metadata',
-  CHANGELOG: 'changelog',
-  ISSUELINKS: 'issuelinks'
-};
 
 /**
  * Sync all data from Jira
  */
 export async function syncAll(client) {
   logger.info('[Sync] Starting full sync...');
+  const warnings = [];
 
   try {
     await initDatabase();
@@ -43,7 +30,7 @@ export async function syncAll(client) {
 
     await syncProjects(client);
     await syncAllBoards(client);
-    await syncAllSprints(client);
+    await syncAllSprints(client, warnings);
 
     await setMetadata('last_full_sync', new Date().toISOString());
     await setMetadata('last_sync', new Date().toISOString());
@@ -51,7 +38,7 @@ export async function syncAll(client) {
     const changeCount = await countChangelogEntries();
 
     logger.info(`[Sync] Full sync completed with ${changeCount} changes`);
-    return { success: true, timestamp: new Date(), changeCount };
+    return { success: true, timestamp: new Date(), changeCount, warnings };
   } catch (error) {
     logger.error('[Sync] Full sync failed:', error);
     throw error;
@@ -63,6 +50,7 @@ export async function syncAll(client) {
  */
 export async function syncIncremental(client) {
   logger.info('[Sync] Starting incremental sync...');
+  const warnings = [];
 
   try {
     await initDatabase();
@@ -73,14 +61,14 @@ export async function syncIncremental(client) {
 
     await syncProjects(client);
     await syncAllBoards(client);
-    await syncUpdatedIssues(client, lastSync);
+    await syncUpdatedIssues(client, lastSync, warnings);
 
     await setMetadata('last_sync', new Date().toISOString());
 
     const changeCount = await countChangelogEntries();
 
     logger.info(`[Sync] Incremental sync completed with ${changeCount} changes`);
-    return { success: true, timestamp: new Date(), changeCount };
+    return { success: true, timestamp: new Date(), changeCount, warnings };
   } catch (error) {
     logger.error('[Sync] Incremental sync failed:', error);
     throw error;
@@ -104,7 +92,7 @@ async function syncProjects(client) {
   }));
 
   await putBulk(STORES.PROJECTS, projectsToUpdate);
-  logger.info(`[Sync] Synced ${projects.length} projects`);
+  logger.debug(`[Sync] Synced ${projects.length} projects`);
 }
 
 /**
@@ -122,24 +110,24 @@ async function syncAllBoards(client) {
   }));
 
   await putBulk(STORES.BOARDS, boardsToUpdate);
-  logger.info(`[Sync] Synced ${allBoards.length} boards`);
+  logger.debug(`[Sync] Synced ${allBoards.length} boards`);
 }
 
 /**
  * Sync all sprints from all boards
  */
-async function syncAllSprints(client) {
+async function syncAllSprints(client, warnings) {
   const boards = await getAll(STORES.BOARDS);
 
   for (const board of boards) {
-    await syncSprintsForBoard(client, board.id);
+    await syncSprintsForBoard(client, board.id, warnings);
   }
 }
 
 /**
  * Sync sprints for a specific board
  */
-async function syncSprintsForBoard(client, boardId) {
+async function syncSprintsForBoard(client, boardId, warnings) {
   const allSprints = [];
 
   try {
@@ -176,23 +164,23 @@ async function syncSprintsForBoard(client, boardId) {
   });
 
   await putBulk(STORES.SPRINTS, sprintsToUpdate);
-  logger.info(`[Sync] Synced ${allSprints.length} sprints for board ${boardId}`);
+  logger.debug(`[Sync] Synced ${allSprints.length} sprints for board ${boardId}`);
 
   // If board has sprints, sync issues for each sprint
   if (allSprints.length > 0) {
     for (const sprint of allSprints) {
-      await syncSprintIssues(client, boardId, sprint.id);
+      await syncSprintIssues(client, boardId, sprint.id, warnings);
     }
   } else {
     // Board doesn't have sprints - sync all issues directly from the board
-    await syncBoardIssues(client, boardId);
+    await syncBoardIssues(client, boardId, warnings);
   }
 }
 
 /**
  * Sync all issues from a board (for boards without sprints)
  */
-async function syncBoardIssues(client, boardId) {
+async function syncBoardIssues(client, boardId, warnings) {
   try {
     let startAt = 0;
     const maxResults = 100;
@@ -212,16 +200,17 @@ async function syncBoardIssues(client, boardId) {
       startAt += maxResults;
     }
 
-    logger.info(`[Sync] Synced ${totalIssues} issues for board ${boardId} (no sprints)`);
+    logger.debug(`[Sync] Synced ${totalIssues} issues for board ${boardId} (no sprints)`);
   } catch (error) {
     logger.error(`[Sync] Failed to sync issues for board ${boardId} (no sprints):`, error);
+    warnings.push(`Failed to sync issues for board ${boardId}: ${error.message}`);
   }
 }
 
 /**
  * Sync issues for a specific sprint
  */
-async function syncSprintIssues(client, boardId, sprintId) {
+async function syncSprintIssues(client, boardId, sprintId, warnings) {
   try {
     const jql = `sprint = ${sprintId}`;
     let startAt = 0;
@@ -242,16 +231,17 @@ async function syncSprintIssues(client, boardId, sprintId) {
       startAt += maxResults;
     }
 
-    logger.info(`[Sync] Synced ${totalIssues} issues for sprint ${sprintId}`);
+    logger.debug(`[Sync] Synced ${totalIssues} issues for sprint ${sprintId}`);
   } catch (error) {
     logger.error(`[Sync] Failed to sync issues for sprint ${sprintId}:`, error);
+    warnings.push(`Failed to sync sprint ${sprintId}: ${error.message}`);
   }
 }
 
 /**
  * Sync updated issues since a given timestamp
  */
-async function syncUpdatedIssues(client, sinceTimestamp) {
+async function syncUpdatedIssues(client, sinceTimestamp, warnings) {
   const boards = await getAll(STORES.BOARDS);
 
   for (const board of boards) {
@@ -287,9 +277,10 @@ async function syncUpdatedIssues(client, sinceTimestamp) {
         startAt += maxResults;
       }
 
-      logger.info(`[Sync] Synced ${totalIssues} updated issues for board ${board.id}`);
+      logger.debug(`[Sync] Synced ${totalIssues} updated issues for board ${board.id}`);
     } catch (error) {
       logger.error(`[Sync] Failed to sync updated issues for board ${board.id}:`, error);
+      warnings.push(`Failed to sync updated issues for board ${board.id}: ${error.message}`);
     }
   }
 }
@@ -462,7 +453,7 @@ async function upsertIssues(issues, boardId, sprintId) {
 
   if (linkEntries.length > 0) {
     await putBulk(STORES.ISSUELINKS, linkEntries);
-    logger.info(`[Sync] Extracted ${linkEntries.length} issue links`);
+    logger.debug(`[Sync] Extracted ${linkEntries.length} issue links`);
   }
 
   // Diff tracking: compare old vs new and log changes
@@ -497,7 +488,7 @@ async function upsertIssues(issues, boardId, sprintId) {
 
   if (changeEntries.length > 0) {
     await putBulk(STORES.CHANGELOG, changeEntries);
-    logger.info(`[Sync] Tracked ${changeEntries.length} changed issues`);
+    logger.debug(`[Sync] Tracked ${changeEntries.length} changed issues`);
   }
 }
 

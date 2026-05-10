@@ -1,3 +1,4 @@
+import { escapeHtml } from '../utils/html.js';
 import { searchIssues } from '../db/queries.js';
 import { openIssueDrawer } from './IssueDetailDrawer.js';
 

@@ -6,8 +6,8 @@
 import logger from '../utils/logger.js';
 
 const DB_NAME = 'jira-planner-db';
-const DB_VERSION = 6;
-const STORE_NAMES = {
+const DB_VERSION = 7;
+export const STORE_NAMES = {
   PROJECTS: 'projects',
   BOARDS: 'boards',
   SPRINTS: 'sprints',
@@ -245,6 +245,7 @@ export async function del(storeName, key) {
  */
 export async function clear(storeName) {
   const db = getDatabase();
+  if (!db.objectStoreNames.contains(storeName)) return;
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);

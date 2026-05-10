@@ -21,7 +21,6 @@
     "vitest": "^4.1.5"
   },
   "dependencies": {
-    "idb": "^8.0.3",
-    "jira-client": "^8.2.2"
+    "idb": "^8.0.3"
   }
 }

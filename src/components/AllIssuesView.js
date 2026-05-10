@@ -7,6 +7,7 @@ import { FilterPanel, FilterPanelStyles } from './FilterPanel.js';
 import { TableView, TableViewStyles } from './TableView.js';
 import { SavedViewsMenu, SavedViewsMenuStyles } from './SavedViewsMenu.js';
 import { openIssueDrawer } from './IssueDetailDrawer.js';
+import { escapeHtml } from '../utils/html.js';
 import logger from '../utils/logger.js';
 import { debounce } from '../utils/debounce.js';
 import {
@@ -62,6 +63,10 @@ export class AllIssuesView {
     if (this.debouncedLoadIssues && this.debouncedLoadIssues.cancel) {
       this.debouncedLoadIssues.cancel();
     }
+    if (this.filterPanel) {
+      this.filterPanel.destroy();
+      this.filterPanel = null;
+    }
   }
 
   /**
@@ -74,6 +79,8 @@ export class AllIssuesView {
     if (filters !== null) {
       this.filters = filters;
     }
+
+    this.error = null;
 
     // Skip loading indicator for quick filter changes
     if (!skipLoadingIndicator) {
@@ -156,6 +163,7 @@ export class AllIssuesView {
    * Load available filter options
    */
   async loadFilterOptions() {
+    const users = await getAllUsers();
     this.availableFilterOptions = {
       projects: await getAllProjects(),
       boards: await getAllBoards(),
@@ -164,11 +172,11 @@ export class AllIssuesView {
       fixVersion: await getFixVersions(),
       customer: await getCustomers(),
       product: await getProducts(),
-      assignee: await getAllUsers(),
-      reporter: await getAllUsers(),
-      qaTester: await getAllUsers(),
-      codeReviewer1: await getAllUsers(),
-      codeReviewer2: await getAllUsers(),
+      assignee: users,
+      reporter: users,
+      qaTester: users,
+      codeReviewer1: users,
+      codeReviewer2: users,
       issueType: await getIssueTypes(),
       priority: await getPriorities(),
       tags: await getAllTags()
@@ -190,6 +198,8 @@ export class AllIssuesView {
   handleViewLoad(view) {
     this.filters = view.filters || {};
     this.viewOptions.columns = view.columns || this.viewOptions.columns;
+    this.viewOptions.sortField = view.sortField || this.viewOptions.sortField;
+    this.viewOptions.sortDirection = view.sortDirection || this.viewOptions.sortDirection;
     this.loadIssues();
   }
 
@@ -199,7 +209,9 @@ export class AllIssuesView {
   handleViewSave(name) {
     return {
       columns: this.viewOptions.columns,
-      filters: this.filters
+      filters: this.filters,
+      sortField: this.viewOptions.sortField,
+      sortDirection: this.viewOptions.sortDirection
     };
   }
 
@@ -322,10 +334,13 @@ export class AllIssuesView {
     // Render Filter Panel
     const filterPanelContainer = document.getElementById('filter-panel-container');
     if (filterPanelContainer) {
-      const filterPanel = new FilterPanel(this.filters, this.boundHandleFilterChange);
-      filterPanel.setAvailableOptions(this.availableFilterOptions);
-      filterPanelContainer.innerHTML = filterPanel.render(this.issues.length);
-      filterPanel.bindEvents();
+      if (this.filterPanel) {
+        this.filterPanel.destroy();
+      }
+      this.filterPanel = new FilterPanel(this.filters, this.boundHandleFilterChange);
+      this.filterPanel.setAvailableOptions(this.availableFilterOptions);
+      filterPanelContainer.innerHTML = this.filterPanel.render(this.issues.length);
+      this.filterPanel.bindEvents();
     }
 
     // Render Table View
@@ -397,21 +412,25 @@ export class AllIssuesView {
   exportCSV() {
     if (!this.issues || this.issues.length === 0) return;
     const quote = (str) => `"${(str ?? '').replace(/"/g, '""')}"`;
-    const headers = ['Key', 'Summary', 'Issue Type', 'Status', 'Priority', 'Assignee', 'Reporter', 'Fix Version', 'Created', 'Updated'];
-    const rows = this.issues.map(i => [
-      i.key,
-      quote(i.summary),
-      quote(i.issue_type),
-      quote(i.status),
-      quote(i.priority),
-      quote(i.assignee_name || 'Unassigned'),
-      quote(i.reporter_name),
-      quote(i.fix_version),
-      i.created_at || '',
-      i.updated_at || ''
-    ]);
+
+    const colLabels = {
+      key: 'Key', summary: 'Summary', issue_type: 'Issue Type', status: 'Status',
+      priority: 'Priority', assignee_name: 'Assignee', reporter_name: 'Reporter',
+      qa_tester_name: 'QA Tester', fix_version: 'Fix Version', customer: 'Customer',
+      product: 'Product', created_at: 'Created', updated_at: 'Updated',
+      resolved_at: 'Resolved', tags: 'Tags', sprint_name: 'Sprint',
+      board_name: 'Board', project_name: 'Project', code_reviewer_1_name: 'Code Reviewer #1',
+      code_reviewer_2_name: 'Code Reviewer #2'
+    };
+
+    const columns = this.viewOptions?.columns || ['key', 'summary', 'issue_type', 'status', 'priority', 'assignee_name', 'reporter_name', 'fix_version', 'created_at', 'updated_at'];
+    const headers = columns.map(c => colLabels[c] || c);
+    const rows = this.issues.map(i =>
+      columns.map(c => quote(i[c] ?? ''))
+    );
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -426,7 +445,7 @@ export class AllIssuesView {
         <div class="error-state">
           <div class="error-icon">⚠️</div>
           <h3>Failed to load issues</h3>
-          <p>${this.error || 'Unknown error'}</p>
+          <p>${escapeHtml(this.error || 'Unknown error')}</p>
           <button class="btn btn-primary retry-btn" id="retry-load-btn">Retry</button>
         </div>
       </div>

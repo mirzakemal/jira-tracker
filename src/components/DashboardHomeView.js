@@ -5,6 +5,8 @@
 
 import { getDashboardData } from '../db/queries.js';
 import { escapeHtml } from '../utils/html.js';
+import { openIssueDrawer } from './IssueDetailDrawer.js';
+import { navigate } from '../utils/router.js';
 import logger from '../utils/logger.js';
 
 export class DashboardHomeView {
@@ -17,6 +19,7 @@ export class DashboardHomeView {
     this.data = null;
     this._eventsBound = false;
     this._releasesExpanded = false;
+    this._analyticsExpanded = false;
   }
 
   /**
@@ -47,6 +50,7 @@ export class DashboardHomeView {
   refresh() {
     const container = document.getElementById('dashboard-container');
     if (container) {
+      this._eventsBound = false;
       container.innerHTML = this.render();
       this.bindEvents();
     }
@@ -114,7 +118,7 @@ export class DashboardHomeView {
   }
 
   renderDashboard() {
-    const { velocityTrend, atRiskReleases, agingOutliers, workloadImbalance } = this.data;
+    const { velocityTrend, atRiskReleases, agingOutliers, workloadImbalance, throughput, cycleTime, statusDist, backlogHealth } = this.data;
 
     return `
       <div class="dashboard-container" id="dashboard-container">
@@ -130,6 +134,15 @@ export class DashboardHomeView {
           ${this.renderAgingCard(agingOutliers)}
           ${this.renderWorkloadCard(workloadImbalance)}
         </div>
+        <div class="dashboard-grid-more" style="display:${this._analyticsExpanded ? 'grid' : 'none'}">
+          ${this.renderThroughputCard(throughput)}
+          ${this.renderCycleTimeCard(cycleTime)}
+          ${this.renderStatusCard(statusDist)}
+          ${this.renderBacklogCard(backlogHealth)}
+        </div>
+        <button class="analytics-toggle-btn" id="analytics-toggle-btn">
+          ${this._analyticsExpanded ? 'Show less ▴' : 'Show all analytics ▾'}
+        </button>
       </div>
     `;
   }
@@ -139,14 +152,38 @@ export class DashboardHomeView {
   renderVelocityCard(trend) {
     const hasData = trend && trend.length > 0;
     const maxVel = hasData ? Math.max(...trend.map(s => s.velocity), 1) : 1;
+    const trendIcon = this.data?.trend === 'up' ? '↑' : this.data?.trend === 'down' ? '↓' : '→';
+
+    const formatShortDate = (d) => {
+      if (!d) return '';
+      const date = new Date(d);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    // Sparkline SVG points
+    let sparkline = '';
+    if (hasData && trend.length >= 2) {
+      const w = 120, h = 30;
+      const points = trend.map((s, i) => {
+        const x = (i / (trend.length - 1)) * w;
+        const y = h - (s.velocity / maxVel) * h;
+        return `${x},${y}`;
+      }).join(' ');
+      sparkline = `<svg class="velocity-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="var(--primary)" stroke-width="2"/></svg>`;
+    }
 
     return `
-      <div class="dashboard-card">
-        <h3 class="card-title">📈 Sprint Velocity Trend</h3>
-        ${!hasData ? '<p class="card-empty">No completed sprints yet.</p>' : `
+      <div class="dashboard-card" data-nav="velocity">
+        <div class="card-header">
+          <h3 class="card-title">📈 Sprint Velocity Trend</h3>
+          <a class="card-drilldown" data-nav="velocity">View all →</a>
+        </div>
+        ${!hasData ? '<p class="card-empty">No completed sprints yet. Complete a sprint to see velocity trends.</p>' : `
+          ${sparkline}
           <div class="velocity-chart">
             ${trend.map(s => {
               const barH = Math.max((s.velocity / maxVel) * 100, 2);
+              const dateLabel = formatShortDate(s.end_date);
               return `
                 <div class="velocity-bar-group">
                   <div class="velocity-bar-wrapper">
@@ -155,12 +192,14 @@ export class DashboardHomeView {
                     </div>
                   </div>
                   <span class="velocity-sprint-label">${escapeHtml(s.name || '')}</span>
+                  ${dateLabel ? `<span class="velocity-date-label">${dateLabel}</span>` : ''}
                 </div>
               `;
             }).join('')}
           </div>
           <div class="velocity-summary">
             <span class="card-stat">Avg: ${Math.round(trend.reduce((sum, s) => sum + s.velocity, 0) / trend.length)} issues/sprint</span>
+            <span class="card-stat trend-${this.data?.trend || 'stable'}">${trendIcon} ${this.data?.trend || 'stable'}</span>
           </div>
         `}
       </div>
@@ -195,9 +234,12 @@ export class DashboardHomeView {
     };
 
     return `
-      <div class="dashboard-card">
-        <h3 class="card-title">⚠️ At-Risk Releases</h3>
-        ${!hasData ? '<p class="card-empty">No versions with issues.</p>' : `
+      <div class="dashboard-card" data-nav="releases">
+        <div class="card-header">
+          <h3 class="card-title">⚠️ At-Risk Releases</h3>
+          <a class="card-drilldown" data-nav="releases">View all →</a>
+        </div>
+        ${!hasData ? '<p class="card-empty">All releases on track. No at-risk versions found.</p>' : `
           <div class="risk-list">
             ${displayReleases.map(renderItem).join('')}
           </div>
@@ -213,11 +255,20 @@ export class DashboardHomeView {
 
   renderAgingCard(outliers) {
     const hasData = outliers && outliers.length > 0;
+    const getSeverityClass = (days) => {
+      if (days >= 30) return 'aging-emergency';
+      if (days >= 14) return 'aging-critical';
+      if (days >= 7) return 'aging-warning';
+      return '';
+    };
 
     return `
-      <div class="dashboard-card">
-        <h3 class="card-title">🐌 Aging Outliers</h3>
-        ${!hasData ? '<p class="card-empty">No stuck issues found.</p>' : `
+      <div class="dashboard-card" data-nav="aging">
+        <div class="card-header">
+          <h3 class="card-title">🐌 Aging Outliers</h3>
+          <a class="card-drilldown" data-nav="aging">View all →</a>
+        </div>
+        ${!hasData ? '<p class="card-empty">No stuck issues. All active issues are moving.</p>' : `
           <div class="aging-list">
             ${outliers.map(i => `
               <div class="aging-item">
@@ -227,7 +278,7 @@ export class DashboardHomeView {
                 </div>
                 <div class="aging-item-meta">
                   <span class="status-badge">${escapeHtml(i.status || '')}</span>
-                  <span class="aging-days ${i.daysInStatus > 14 ? 'aging-critical' : ''}">${i.daysInStatus}d in status</span>
+                  <span class="aging-days ${getSeverityClass(i.daysInStatus)}">${i.daysInStatus}d in status</span>
                 </div>
               </div>
             `).join('')}
@@ -239,22 +290,31 @@ export class DashboardHomeView {
 
   renderWorkloadCard(imbalance) {
     const hasData = imbalance && imbalance.people.length > 0;
-    const maxCount = hasData ? Math.max(...imbalance.people.map(p => p.issueCount), 1) : 1;
+    const maxCount = hasData ? Math.max(...imbalance.people.map(p => p.weightedScore || p.issueCount), 1) : 1;
+
+    const getWorkloadClass = (p) => {
+      if (!imbalance.average || imbalance.average === 0) return '';
+      const ratio = p.issueCount / imbalance.average;
+      if (ratio > 2) return 'workload-heavy';
+      if (ratio > 1.3) return 'workload-over';
+      return '';
+    };
 
     return `
-      <div class="dashboard-card">
-        <h3 class="card-title">👥 Workload Distribution</h3>
-        ${!hasData ? '<p class="card-empty">No active assignees.</p>' : `
+      <div class="dashboard-card" data-nav="workload">
+        <div class="card-header">
+          <h3 class="card-title">👥 Workload Distribution</h3>
+          <a class="card-drilldown" data-nav="workload">View all →</a>
+        </div>
+        ${!hasData ? '<p class="card-empty">No active assignees. Assign issues to team members.</p>' : `
           <div class="workload-list">
             ${imbalance.people.map(p => {
-              const barW = Math.max((p.issueCount / maxCount) * 100, 2);
-              const isOverAvg = p.issueCount > imbalance.average * 1.3;
-
+              const barW = Math.max(((p.weightedScore || p.issueCount) / maxCount) * 100, 2);
               return `
                 <div class="workload-item">
                   <span class="workload-name">${escapeHtml(p.name || p.id)}</span>
                   <div class="workload-bar-track">
-                    <div class="workload-bar-fill ${isOverAvg ? 'workload-over' : ''}" style="width:${barW}%">${p.issueCount}</div>
+                    <div class="workload-bar-fill ${getWorkloadClass(p)}" style="width:${barW}%">${p.issueCount}</div>
                   </div>
                 </div>
               `;
@@ -263,6 +323,121 @@ export class DashboardHomeView {
           <div class="workload-summary">
             <span class="card-stat">Total active: ${imbalance.totalActive}</span>
             <span class="card-stat">Avg: ${imbalance.average}/person</span>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  // --- New Card Renderers ---
+
+  renderThroughputCard(data) {
+    const hasData = data && data.length > 0 && data.some(w => w.created > 0 || w.resolved > 0);
+    const max = hasData ? Math.max(...data.map(w => Math.max(w.created, w.resolved)), 1) : 1;
+    const totalCreated = hasData ? data.reduce((s, w) => s + w.created, 0) : 0;
+    const totalResolved = hasData ? data.reduce((s, w) => s + w.resolved, 0) : 0;
+    const net = totalResolved - totalCreated;
+    const netLabel = net >= 0 ? `Net: −${net} issues` : `Net: +${Math.abs(net)} issues`;
+    const last2Created = hasData ? data.slice(-2).reduce((s, w) => s + w.created, 0) : 0;
+    const last2Resolved = hasData ? data.slice(-2).reduce((s, w) => s + w.resolved, 0) : 0;
+    const arrow = last2Resolved > last2Created ? '↑' : last2Resolved < last2Created ? '↓' : '→';
+
+    return `
+      <div class="dashboard-card">
+        <h3 class="card-title">📊 Throughput</h3>
+        ${!hasData ? '<p class="card-empty">Sync more data to see throughput trends.</p>' : `
+          <div class="throughput-chart">
+            ${data.map(w => `
+              <div class="throughput-col">
+                <div class="throughput-bars">
+                  <div class="throughput-bar throughput-created" style="height:${Math.max((w.created / max) * 100, 2)}%" title="Created: ${w.created}"></div>
+                  <div class="throughput-bar throughput-resolved" style="height:${Math.max((w.resolved / max) * 100, 2)}%" title="Resolved: ${w.resolved}"></div>
+                </div>
+                <span class="throughput-label">${w.week}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="throughput-summary">
+            <span class="card-stat">${arrow} ${netLabel}</span>
+            <span class="throughput-legend"><span class="legend-dot throughput-created"></span>Created <span class="legend-dot throughput-resolved"></span>Resolved</span>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  renderCycleTimeCard(data) {
+    const hasData = data && data.length > 0;
+    const maxDays = hasData ? Math.max(...data.map(d => d.medianDays), 1) : 1;
+    const getColor = (days) => days <= 3 ? 'var(--success)' : days <= 7 ? '#f59e0b' : 'var(--danger)';
+
+    return `
+      <div class="dashboard-card">
+        <h3 class="card-title">⏱️ Cycle Time</h3>
+        ${!hasData ? '<p class="card-empty">Resolve some issues to see cycle time metrics.</p>' : `
+          <div class="cycletime-list">
+            ${data.slice(0, 5).map(d => `
+              <div class="cycletime-row">
+                <span class="cycletime-type">${escapeHtml(d.type)}</span>
+                <div class="cycletime-bar-track">
+                  <div class="cycletime-bar-fill" style="width:${(d.medianDays / maxDays) * 100}%;background:${getColor(d.medianDays)}"></div>
+                </div>
+                <span class="cycletime-value">${d.medianDays}d <small>(${d.count})</small></span>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  renderStatusCard(data) {
+    const hasData = data && data.total > 0;
+    const pctTodo = hasData ? Math.round((data.todo / data.total) * 100) : 0;
+    const pctInProgress = hasData ? Math.round((data.inProgress / data.total) * 100) : 0;
+    const pctDone = hasData ? 100 - pctTodo - pctInProgress : 0;
+
+    return `
+      <div class="dashboard-card">
+        <h3 class="card-title">📋 Status Distribution</h3>
+        ${!hasData ? '<p class="card-empty">No issues found — sync data first.</p>' : `
+          <div class="status-stacked-bar">
+            <div class="status-seg status-todo" style="width:${pctTodo}%" title="To Do: ${data.todo}"></div>
+            <div class="status-seg status-inprogress" style="width:${pctInProgress}%" title="In Progress: ${data.inProgress}"></div>
+            <div class="status-seg status-done" style="width:${pctDone}%" title="Done: ${data.done}"></div>
+          </div>
+          <div class="status-labels">
+            <span class="status-label"><span class="legend-dot status-todo"></span>To Do: ${data.todo}</span>
+            <span class="status-label"><span class="legend-dot status-inprogress"></span>In Progress: ${data.inProgress}</span>
+            <span class="status-label"><span class="legend-dot status-done"></span>Done: ${data.done}</span>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  renderBacklogCard(data) {
+    const hasData = data && data.total > 0;
+    const warn = hasData && (data.stale + data.ancient) > data.total * 0.5;
+
+    return `
+      <div class="dashboard-card">
+        <h3 class="card-title">📦 Backlog Health ${warn ? '<span class="backlog-warn">⚠</span>' : ''}</h3>
+        ${!hasData ? '<p class="card-empty">No unscheduled issues — backlog is clean.</p>' : `
+          <div class="backlog-stacked-bar">
+            <div class="backlog-seg backlog-fresh" style="width:${(data.fresh / data.total) * 100}%" title="Fresh (0-7d): ${data.fresh}"></div>
+            <div class="backlog-seg backlog-aging" style="width:${(data.aging / data.total) * 100}%" title="Aging (7-30d): ${data.aging}"></div>
+            <div class="backlog-seg backlog-stale" style="width:${(data.stale / data.total) * 100}%" title="Stale (30-90d): ${data.stale}"></div>
+            <div class="backlog-seg backlog-ancient" style="width:${(data.ancient / data.total) * 100}%" title="Ancient (90d+): ${data.ancient}"></div>
+          </div>
+          <div class="backlog-labels">
+            <span class="backlog-label"><span class="legend-dot backlog-fresh"></span>${data.fresh} fresh</span>
+            <span class="backlog-label"><span class="legend-dot backlog-aging"></span>${data.aging} aging</span>
+            <span class="backlog-label"><span class="legend-dot backlog-stale"></span>${data.stale} stale</span>
+            <span class="backlog-label"><span class="legend-dot backlog-ancient"></span>${data.ancient} ancient</span>
+          </div>
+          <div class="backlog-total">
+            <span class="card-stat">${data.total} unscheduled issues</span>
           </div>
         `}
       </div>
@@ -286,8 +461,21 @@ export class DashboardHomeView {
 
     document.getElementById('releases-toggle-btn')?.addEventListener('click', () => {
       this._releasesExpanded = !this._releasesExpanded;
-      this.render();
-      this.bindEvents();
+      this.refresh();
+    });
+
+    document.getElementById('analytics-toggle-btn')?.addEventListener('click', () => {
+      this._analyticsExpanded = !this._analyticsExpanded;
+      this.refresh();
+    });
+
+    // Drill-down navigation
+    document.querySelectorAll('[data-nav]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-issue-key]')) return;
+        const route = el.getAttribute('data-nav');
+        if (route) navigate(route);
+      });
     });
 
     // Issue link clicks for aging outliers
@@ -295,9 +483,7 @@ export class DashboardHomeView {
       el.addEventListener('click', (e) => {
         e.preventDefault();
         const key = el.getAttribute('data-issue-key');
-        if (key && this.jiraDomain) {
-          window.open(`https://${this.jiraDomain}/browse/${key}`, '_blank');
-        }
+        if (key) openIssueDrawer(key, this.jiraDomain, () => {});
       });
     });
   }
@@ -340,6 +526,10 @@ export const DashboardHomeViewStyles = `
     box-shadow: var(--shadow);
   }
 
+  .dashboard-card-wide {
+    grid-column: 1 / -1;
+  }
+
   .card-title {
     margin: 0 0 16px;
     font-size: 16px;
@@ -360,13 +550,15 @@ export const DashboardHomeViewStyles = `
   }
 
   /* Velocity Chart */
-  .velocity-chart {
+  .dashboard-card .velocity-chart {
     display: flex;
     align-items: flex-end;
     justify-content: space-around;
-    height: 160px;
+    min-height: 160px;
     gap: 12px;
-    padding: 0 8px;
+    padding: 20px 8px 0;
+    overflow: visible;
+    position: relative;
   }
 
   .velocity-bar-group {
@@ -589,4 +781,258 @@ export const DashboardHomeViewStyles = `
   .retry-btn:hover {
     background: var(--hover);
   }
+
+  /* Card header with drilldown */
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .card-header .card-title {
+    margin: 0;
+  }
+
+  .card-drilldown {
+    font-size: 12px;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .card-drilldown:hover {
+    text-decoration: underline;
+  }
+
+  [data-nav] {
+    cursor: pointer;
+  }
+
+  /* Trend indicator */
+  .trend-up { color: var(--success); }
+  .trend-down { color: var(--danger); }
+  .trend-stable { color: var(--text-secondary); }
+
+  /* Velocity sparkline */
+  .velocity-sparkline {
+    width: 100%;
+    height: 30px;
+    margin-bottom: 8px;
+  }
+
+  /* Sprint date labels */
+  .velocity-date-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+  }
+
+  /* Aging severity colors */
+  .aging-days.aging-warning {
+    color: #f59e0b;
+    font-weight: 500;
+  }
+
+  .aging-days.aging-critical {
+    color: #f97316;
+    font-weight: 600;
+  }
+
+  .aging-days.aging-emergency {
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  /* Workload overload colors */
+  .workload-bar-fill.workload-heavy {
+    background: var(--danger);
+  }
+
+  .risk-toggle-btn {
+    margin-top: 8px;
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 0;
+  }
+
+  .risk-toggle-btn:hover {
+    text-decoration: underline;
+  }
+
+  /* Analytics toggle */
+  .analytics-toggle-btn {
+    display: block;
+    margin: 20px auto 0;
+    padding: 8px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .analytics-toggle-btn:hover { background: var(--hover); }
+
+  .dashboard-grid-more {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+  }
+  @media (max-width: 900px) {
+    .dashboard-grid-more { grid-template-columns: 1fr; }
+  }
+
+  /* Throughput Chart */
+  .throughput-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+    padding: 0 4px;
+  }
+  .throughput-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .throughput-bars {
+    display: flex;
+    gap: 2px;
+    align-items: flex-end;
+    width: 100%;
+    height: 100px;
+  }
+  .throughput-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+  }
+  .throughput-created { background: var(--primary); }
+  .throughput-resolved { background: var(--success); }
+  .throughput-label {
+    font-size: 9px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    white-space: nowrap;
+  }
+  .throughput-summary {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .throughput-legend {
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 3px;
+  }
+  .legend-dot.throughput-created { background: var(--primary); }
+  .legend-dot.throughput-resolved { background: var(--success); }
+
+  /* Cycle Time */
+  .cycletime-list { display: flex; flex-direction: column; gap: 10px; }
+  .cycletime-row { display: flex; align-items: center; gap: 10px; }
+  .cycletime-type {
+    width: 80px;
+    font-size: 13px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .cycletime-bar-track {
+    flex: 1;
+    height: 16px;
+    background: var(--hover-border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .cycletime-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+  .cycletime-value {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* Status Distribution */
+  .status-stacked-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .status-seg { min-width: 2px; }
+  .status-todo { background: var(--text-secondary); }
+  .status-inprogress { background: var(--primary); }
+  .status-done { background: var(--success); }
+  .status-labels {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .status-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+  }
+  .legend-dot.status-todo { background: var(--text-secondary); }
+  .legend-dot.status-inprogress { background: var(--primary); }
+  .legend-dot.status-done { background: var(--success); }
+
+  /* Backlog Health */
+  .backlog-stacked-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .backlog-seg { min-width: 2px; }
+  .backlog-fresh { background: var(--success); }
+  .backlog-aging { background: #f59e0b; }
+  .backlog-stale { background: #f97316; }
+  .backlog-ancient { background: var(--danger); }
+  .backlog-labels {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .backlog-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+  }
+  .legend-dot.backlog-fresh { background: var(--success); }
+  .legend-dot.backlog-aging { background: #f59e0b; }
+  .legend-dot.backlog-stale { background: #f97316; }
+  .legend-dot.backlog-ancient { background: var(--danger); }
+  .backlog-total { margin-top: 8px; text-align: center; }
+  .backlog-warn { color: #f59e0b; }
 `;

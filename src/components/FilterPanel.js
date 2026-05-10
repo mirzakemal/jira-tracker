@@ -79,7 +79,8 @@ export class FilterPanel {
     const fields = ['projectKey', 'boardId', 'sprintId', 'searchQuery',
       'status', 'priority', 'issueType', 'fixVersion', 'customer', 'product',
       'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id',
-      'tag', 'updatedAfter', 'toBeTestedByDate'];
+      'tag', 'updatedAfter', 'toBeTestedByDate', 'createdAfter', 'createdBefore',
+      'resolvedAfter', 'resolvedBefore', 'tagPresence', 'sprintState'];
     for (const f of fields) {
       const v = this.filters[f];
       if (Array.isArray(v) && v.length > 0) count += v.length;
@@ -101,7 +102,7 @@ export class FilterPanel {
             ${activeCount > 0 ? `<span class="filter-active-count">${activeCount}</span>` : ''}
             ${countLabel ? `<span class="filter-issue-count">${countLabel}</span>` : ''}
           </div>
-          <button class="clear-filters-btn" id="clear-filters-btn" title="Clear all filters">
+          <button class="clear-filters-btn" id="filter-panel-clear-btn" title="Clear all filters">
             Clear all
           </button>
         </div>
@@ -116,6 +117,8 @@ export class FilterPanel {
               (this.availableFilters.boards || []).map(b => ({ value: String(b.id), label: b.name })))}
             ${this.renderSelect('sprint', 'Sprint', 'sprintId',
               (this.availableFilters.sprints || []).map(s => ({ value: String(s.id), label: s.name })))}
+            ${this.renderMultiSelect('sprintState', 'Sprint State',
+              [{ value: 'active' }, { value: 'closed' }, { value: 'future' }], this.filters.sprintState || [])}
           `)}
 
           ${this.renderSection('workflow', 'Workflow', `
@@ -154,6 +157,11 @@ export class FilterPanel {
               this.availableFilters.product || [], this.filters.product || [])}
             ${this.renderMultiSelect('tag', 'Tags',
               this.availableFilters.tags || [], this.filters.tag || [])}
+            ${this.renderSelect('tagPresence', 'Tag Status', 'tagPresence', [
+              { value: '', label: 'Any' },
+              { value: 'has', label: 'Has tags' },
+              { value: 'none', label: 'No tags' }
+            ])}
           `)}
 
           ${this.renderSection('dates', 'Dates', `
@@ -294,6 +302,38 @@ export class FilterPanel {
       </div>
       <div class="filter-field">
         <div class="filter-field-header">
+          <label for="created-after-filter">Created After</label>
+          ${this.filters.createdAfter ? this.renderClearButton('createdAfter') : ''}
+        </div>
+        <input type="date" id="created-after-filter" class="filter-input"
+          value="${this.filters.createdAfter || ''}" />
+      </div>
+      <div class="filter-field">
+        <div class="filter-field-header">
+          <label for="created-before-filter">Created Before</label>
+          ${this.filters.createdBefore ? this.renderClearButton('createdBefore') : ''}
+        </div>
+        <input type="date" id="created-before-filter" class="filter-input"
+          value="${this.filters.createdBefore || ''}" />
+      </div>
+      <div class="filter-field">
+        <div class="filter-field-header">
+          <label for="resolved-after-filter">Resolved After</label>
+          ${this.filters.resolvedAfter ? this.renderClearButton('resolvedAfter') : ''}
+        </div>
+        <input type="date" id="resolved-after-filter" class="filter-input"
+          value="${this.filters.resolvedAfter || ''}" />
+      </div>
+      <div class="filter-field">
+        <div class="filter-field-header">
+          <label for="resolved-before-filter">Resolved Before</label>
+          ${this.filters.resolvedBefore ? this.renderClearButton('resolvedBefore') : ''}
+        </div>
+        <input type="date" id="resolved-before-filter" class="filter-input"
+          value="${this.filters.resolvedBefore || ''}" />
+      </div>
+      <div class="filter-field">
+        <div class="filter-field-header">
           <label for="to-be-tested-filter">To Be Tested By</label>
           ${this.filters.toBeTestedByDate ? this.renderClearButton('toBeTestedByDate') : ''}
         </div>
@@ -347,7 +387,7 @@ export class FilterPanel {
     }
 
     // Clear all
-    document.getElementById('clear-filters-btn')?.addEventListener('click', () => this.clearAll());
+    document.getElementById('filter-panel-clear-btn')?.addEventListener('click', () => this.clearAll());
 
     // Per-field clear buttons
     document.querySelectorAll('.clear-field-btn').forEach(btn => {
@@ -398,8 +438,10 @@ export class FilterPanel {
         const field = btn.getAttribute('data-field');
         const action = btn.getAttribute('data-action');
         if (action === 'all') {
-          const checkboxes = document.querySelectorAll(`#dropdown-${field} input[type="checkbox"]`);
-          const values = Array.from(checkboxes).map(cb => cb.value);
+          const options = document.querySelectorAll(`#dropdown-${field} .dropdown-option`);
+          const values = Array.from(options)
+            .filter(opt => opt.style.display !== 'none')
+            .map(opt => opt.querySelector('input[type="checkbox"]').value);
           this.filters[field] = values.length > 0 ? values : null;
           if (!this.filters[field]) delete this.filters[field];
         } else {
@@ -439,8 +481,30 @@ export class FilterPanel {
       this.filters.updatedAfter = e.target.value || null;
       this.emitChange();
     });
+    document.getElementById('created-after-filter')?.addEventListener('change', (e) => {
+      this.filters.createdAfter = e.target.value || null;
+      this.emitChange();
+    });
+    document.getElementById('created-before-filter')?.addEventListener('change', (e) => {
+      this.filters.createdBefore = e.target.value || null;
+      this.emitChange();
+    });
+    document.getElementById('resolved-after-filter')?.addEventListener('change', (e) => {
+      this.filters.resolvedAfter = e.target.value || null;
+      this.emitChange();
+    });
+    document.getElementById('resolved-before-filter')?.addEventListener('change', (e) => {
+      this.filters.resolvedBefore = e.target.value || null;
+      this.emitChange();
+    });
     document.getElementById('to-be-tested-filter')?.addEventListener('change', (e) => {
       this.filters.toBeTestedByDate = e.target.value || null;
+      this.emitChange();
+    });
+
+    // Tag presence select
+    document.getElementById('tagPresence-filter')?.addEventListener('change', (e) => {
+      this.filters.tagPresence = e.target.value || null;
       this.emitChange();
     });
 
