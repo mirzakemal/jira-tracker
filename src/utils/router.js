@@ -12,7 +12,9 @@ export const ROUTES = {
   AGING: 'aging',
   RELEASES: 'releases',
   DASHBOARD: 'dashboard',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  CFD: 'cfd',
+  STANDUP: 'standup'
 };
 
 /**

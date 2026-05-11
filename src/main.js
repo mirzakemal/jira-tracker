@@ -21,6 +21,9 @@ import { FilterPanelStyles } from './components/FilterPanel.js'
 import { TableViewStyles } from './components/TableView.js'
 import { SavedViewsMenuStyles } from './components/SavedViewsMenu.js'
 import { TagsManagerStyles } from './components/TagsManager.js'
+import { CumulativeFlowView, CumulativeFlowViewStyles } from './components/CumulativeFlowView.js'
+import { StandupView, StandupViewStyles } from './components/StandupView.js'
+import { initKeyboardShortcuts, KeyboardShortcutsStyles } from './components/KeyboardShortcuts.js'
 import { sharedStyles } from './utils/styles.js'
 import { saveSelection, loadSelection, loadCredentials } from './utils/storage.js'
 import { initDatabase } from './db/indexeddb.js'
@@ -78,6 +81,10 @@ let appElement
  */
 async function init() {
   appElement = document.getElementById('app')
+
+  // Apply saved theme
+  const theme = localStorage.getItem('jira-planner-theme')
+  if (theme) document.documentElement.setAttribute('data-theme', theme)
 
   // Expose router functions globally for components
   window.navigate = navigate
@@ -339,6 +346,30 @@ function handleRouteChange({ route, params }) {
         dashboardView.load().catch(err => logger.error('[Dashboard] load failed:', err))
       }
     }
+  } else if (route === ROUTES.CFD) {
+    if (state.currentView !== 'cfd') {
+      state.currentView = 'cfd'
+      updateViewToggle()
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) boardSelectorContainer.style.display = 'none'
+      cleanupCurrentView()
+      const cfdView = new CumulativeFlowView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = cfdView
+      const container = document.getElementById('issue-board-container')
+      if (container) { container.innerHTML = cfdView.render(); cfdView.load().catch(err => logger.error('[CFD] load failed:', err)); }
+    }
+  } else if (route === ROUTES.STANDUP) {
+    if (state.currentView !== 'standup') {
+      state.currentView = 'standup'
+      updateViewToggle()
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) boardSelectorContainer.style.display = 'none'
+      cleanupCurrentView()
+      const standupView = new StandupView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = standupView
+      const container = document.getElementById('issue-board-container')
+      if (container) { container.innerHTML = standupView.render(); standupView.load().catch(err => logger.error('[Standup] load failed:', err)); }
+    }
   }
 }
 
@@ -469,9 +500,21 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
               <span class="nav-item-icon">🚀</span>
               <span class="nav-item-label">Releases</span>
             </button>
+            <button class="nav-item" data-view="cfd" id="nav-cfd">
+              <span class="nav-item-icon">📈</span>
+              <span class="nav-item-label">Flow</span>
+            </button>
+            <button class="nav-item" data-view="standup" id="nav-standup">
+              <span class="nav-item-icon">🎯</span>
+              <span class="nav-item-label">Standup</span>
+            </button>
           </div>
         </div>
         <div class="sidebar-footer">
+          <button class="sidebar-collapse-btn" id="theme-toggle-btn" title="Toggle dark/light mode">
+            <span>🌗</span>
+            <span class="nav-item-label">Theme</span>
+          </button>
           <button class="sidebar-collapse-btn" id="sidebar-collapse-btn">
             <span>◀</span>
             <span class="nav-item-label">Collapse</span>
@@ -487,9 +530,6 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
           </div>
           <div class="top-bar-right">
             <div id="sync-status-container"></div>
-            <button class="refresh-btn" id="refresh-btn" title="Refresh issues">
-              🔄 Refresh
-            </button>
           </div>
         </div>
         <div class="app-content" id="app-content">
@@ -520,6 +560,16 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
     }
   })
 
+  // Bind theme toggle
+  const savedTheme = localStorage.getItem('jira-planner-theme')
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme)
+  document.getElementById('theme-toggle-btn')?.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme')
+    const next = current === 'dark' ? 'light' : 'dark'
+    document.documentElement.setAttribute('data-theme', next)
+    localStorage.setItem('jira-planner-theme', next)
+  })
+
   // Bind navigation through a single listener on the nav container
   const sidebarNav = document.getElementById('sidebar-nav')
   sidebarNav?.addEventListener('click', (e) => {
@@ -534,14 +584,13 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
       workload: () => switchToWorkloadView(),
       aging: () => switchToAgingView(),
       releases: () => switchToReleasesView(),
-      dashboard: () => switchToDashboardView()
+      dashboard: () => switchToDashboardView(),
+      cfd: () => navigate(ROUTES.CFD),
+      standup: () => navigate(ROUTES.STANDUP)
     }
     const handler = viewSwitchMap[view]
     if (handler) handler()
   })
-
-  // Bind refresh
-  document.getElementById('refresh-btn')?.addEventListener('click', loadIssues)
 
   // Initialize sync status in background
   renderSyncStatus().catch(() => {})
@@ -591,6 +640,9 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
       allIssuesView.loadIssues(filters).catch(err => logger.error('[AllIssues] loadIssues failed:', err))
     }
   }
+
+  // Initialize keyboard shortcuts
+  initKeyboardShortcuts(state.jiraDomain)
 }
 
 /**
@@ -800,6 +852,9 @@ function addGlobalStyles() {
     ${AllIssuesViewStyles || ''}
     ${DashboardHomeViewStyles || ''}
     ${DependencyGraphViewStyles || ''}
+    ${CumulativeFlowViewStyles || ''}
+    ${StandupViewStyles || ''}
+    ${KeyboardShortcutsStyles || ''}
 
     /* Offline indicator */
     .offline-banner {
@@ -830,26 +885,6 @@ function addGlobalStyles() {
       cursor: pointer;
       font-size: 12px;
       font-weight: 600;
-    }
-
-    .refresh-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition: all 0.12s ease;
-    }
-
-    .refresh-btn:hover {
-      background: var(--hover);
-      border-color: var(--primary-border);
     }
 
     .board-selector {

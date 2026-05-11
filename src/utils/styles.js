@@ -423,7 +423,6 @@ export const borderButtonStyles = `
   .customize-columns-btn,
   .saved-views-dropdown,
   .toolbar-btn,
-  .refresh-btn,
   .clear-field-btn {
     display: inline-flex;
     align-items: center;
@@ -457,18 +456,11 @@ export const borderButtonStyles = `
     height: 34px;
   }
 
-  .refresh-btn {
-    background: transparent;
-    box-shadow: none;
-    padding: 7px 10px;
-  }
-
   .border-btn:hover,
   .back-btn:hover,
   .customize-columns-btn:hover,
   .saved-views-dropdown:hover,
-  .toolbar-btn:hover,
-  .refresh-btn:hover {
+  .toolbar-btn:hover {
     background: var(--surface-sunken);
     border-color: var(--border-strong);
     color: var(--text-h);

@@ -1594,30 +1594,8 @@ export async function getDashboardThroughput(weeks = 8) {
     dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
     return dt;
   };
-  const cutoff = new Date(now);
+  const cutoff = startOfWeek(now);
   cutoff.setDate(cutoff.getDate() - weeks * 7);
-
-  console.log('[Throughput] Total issues in DB:', issues.length);
-  console.log('[Throughput] Cutoff date (last', weeks, 'weeks):', cutoff.toISOString());
-
-  const withCreatedAt = issues.filter(i => i.created_at);
-  const withResolvedAt = issues.filter(i => i.resolved_at);
-  console.log('[Throughput] Issues with created_at:', withCreatedAt.length);
-  console.log('[Throughput] Issues with resolved_at:', withResolvedAt.length);
-
-  const createdInRange = withCreatedAt.filter(i => new Date(i.created_at) >= cutoff);
-  const resolvedInRange = withResolvedAt.filter(i => new Date(i.resolved_at) >= cutoff);
-  console.log('[Throughput] Created in range:', createdInRange.length);
-  console.log('[Throughput] Resolved in range:', resolvedInRange.length);
-
-  if (issues.length > 0) {
-    const sample = issues.slice(0, 3);
-    console.log('[Throughput] Sample issue dates:', sample.map(i => ({
-      key: i.key,
-      created_at: i.created_at,
-      resolved_at: i.resolved_at
-    })));
-  }
 
   const buckets = [];
   for (let i = 0; i < weeks; i++) {
@@ -1641,13 +1619,11 @@ export async function getDashboardThroughput(weeks = 8) {
     }
   }
 
-  const result = buckets.map(b => ({
+  return buckets.map(b => ({
     week: b.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     created: b.created,
     resolved: b.resolved
   }));
-  console.log('[Throughput] Final buckets:', result);
-  return result;
 }
 
 /**

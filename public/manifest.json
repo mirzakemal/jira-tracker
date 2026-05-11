@@ -1,0 +1,12 @@
+{
+  "name": "Jira Planner",
+  "short_name": "Jira Planner",
+  "description": "Read-only Jira planning tool with local storage",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#5b5fee",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
