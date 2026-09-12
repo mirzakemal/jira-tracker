@@ -62,9 +62,51 @@ class JiraClient {
   }
 
   /**
-   * Make an authenticated request to the Jira API
+   * Make an authenticated request, retrying transient failures.
+   *
+   * A sync walks hundreds of endpoints back to back, so a single hiccup
+   * — a 429 from Atlassian's rate limiter, a 502 from the proxy, a dropped
+   * connection — used to abort the entire run. These are retried with
+   * exponential backoff; 429 honours the server's Retry-After.
+   *
+   * Retrying is safe for every call here because this client is read-only:
+   * all write operations were removed (see the note at the end of the class).
+   *
+   * Authentication and not-found failures are permanent and fail immediately —
+   * retrying a 401 just burns time before showing the same error.
+   *
+   * @param {string} endpoint
+   * @param {object} [options]
+   * @param {number} [options.attempts=4] - total tries, including the first
+   * @param {(info: {attempt: number, delayMs: number, error: JiraError}) => void} [options.onRetry]
    */
   async request(endpoint, options = {}) {
+    const attempts = options.attempts ?? 4;
+    let lastError;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await this.performRequest(endpoint, options);
+      } catch (error) {
+        lastError = error;
+        if (attempt === attempts || !isRetryable(error)) throw error;
+
+        const delayMs = retryDelayMs(error, attempt);
+        logger.warn(
+          `[Jira API] ${endpoint} failed (${error.message}); retry ${attempt}/${attempts - 1} in ${delayMs}ms`
+        );
+        options.onRetry?.({ attempt, delayMs, error });
+        await sleep(delayMs);
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * A single attempt. `request()` is the retrying wrapper around this.
+   */
+  async performRequest(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = { ...this.getAuthHeader(), ...options.headers };
     const timeout = options.timeout ?? 30000;
@@ -96,8 +138,13 @@ class JiraClient {
         }
         if (response.status === 429) {
           const retryAfter = response.headers.get('Retry-After') || '5';
-          logger.error(`[Jira API] 429 Rate limited - retry after ${retryAfter} seconds`);
-          throw new JiraError(429, `Rate limited. Please wait ${retryAfter} seconds before trying again`);
+          logger.warn(`[Jira API] 429 Rate limited - retry after ${retryAfter} seconds`);
+          const err = new JiraError(429, `Rate limited. Please wait ${retryAfter} seconds before trying again`);
+          // Seconds per RFC 9110. A malformed value falls back to the backoff
+          // schedule rather than producing NaN.
+          const seconds = Number.parseFloat(retryAfter);
+          if (Number.isFinite(seconds) && seconds >= 0) err.retryAfterMs = seconds * 1000;
+          throw err;
         }
         if (response.status >= 500) {
           logger.error(`[Jira API] ${response.status} Server error`);
@@ -135,7 +182,11 @@ class JiraClient {
    * Get all projects accessible to the current user
    */
   async getProjects() {
-    return await this.request('/rest/api/3/project/search?expand=description,lead,issueTypes');
+    // project/search pages the same way the Agile endpoints do, and was
+    // likewise capped at its first page.
+    return await this.getAllPages('/rest/api/3/project/search', {
+      expand: 'description,lead,issueTypes'
+    });
   }
 
   /**
@@ -175,20 +226,60 @@ class JiraClient {
    * Get all boards for a project or all accessible boards
    */
   async getBoards(projectKey = null) {
-    const endpoint = projectKey
-      ? `/rest/agile/1.0/board?projectKeyOrId=${projectKey}`
-      : '/rest/agile/1.0/board';
-    const result = await this.request(endpoint);
-    return result.values || [];
+    // The Agile API caps this endpoint at 50 per page. Returning only the
+    // first page silently dropped every board past the 50th — and with it,
+    // every issue on those boards, which looked like "sync didn't finish".
+    return await this.getAllPages(
+      '/rest/agile/1.0/board',
+      projectKey ? { projectKeyOrId: projectKey } : {}
+    );
+  }
+
+  /**
+   * Walk an Agile API collection endpoint to completion.
+   *
+   * These endpoints page with startAt/maxResults and mark the end with
+   * `isLast`. Older responses omit `isLast`, so a short page is also treated
+   * as the end. The hard page ceiling is a guard against a malformed response
+   * turning this into an infinite loop.
+   *
+   * @param {string} path
+   * @param {object} [params] - extra query parameters
+   * @param {number} [pageSize=50]
+   * @returns {Promise<object[]>}
+   */
+  async getAllPages(path, params = {}, pageSize = 50) {
+    const all = [];
+    let startAt = 0;
+
+    for (let page = 0; page < 200; page += 1) {
+      const query = new URLSearchParams({
+        ...params,
+        startAt: String(startAt),
+        maxResults: String(pageSize)
+      });
+      const result = await this.request(`${path}?${query}`);
+      const values = result.values || [];
+      all.push(...values);
+
+      if (result.isLast === true || values.length < pageSize) return all;
+      startAt += values.length;
+    }
+
+    logger.warn(`[Jira API] ${path} hit the page ceiling; results may be truncated`);
+    return all;
   }
 
   /**
    * Get sprints for a board
    */
   async getSprints(boardId, state = null) {
-    const endpoint = `/rest/agile/1.0/board/${boardId}/sprint${state ? `?state=${state}` : ''}`;
-    const result = await this.request(endpoint);
-    return result.values || [];
+    // Also capped at 50 per page. A long-running board has far more closed
+    // sprints than that, and their issues were never being fetched.
+    return await this.getAllPages(
+      `/rest/agile/1.0/board/${boardId}/sprint`,
+      state ? { state } : {}
+    );
   }
 
   /**
@@ -281,6 +372,44 @@ class JiraClient {
 
   // All write operations (createIssue, updateIssue, transitionIssue, deleteIssue)
   // have been removed. This app is read-only. Only GET requests to Jira are used.
+}
+
+/** Statuses worth trying again. Everything else is a permanent answer. */
+const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+/**
+ * Transient failure, or a permanent one?
+ *
+ * Status 0 is this client's marker for a network error or a client-side
+ * timeout — both usually worth another try.
+ *
+ * @param {Error} error
+ * @returns {boolean}
+ */
+function isRetryable(error) {
+  if (!(error instanceof JiraError)) return false;
+  return error.status === 0 || RETRYABLE_STATUSES.has(error.status);
+}
+
+/**
+ * How long to wait before the next attempt.
+ *
+ * Honours Retry-After when the server sent one (capped, so a long
+ * rate-limit window cannot wedge a sync for minutes), otherwise exponential
+ * backoff with jitter to avoid a thundering herd of parallel syncs.
+ *
+ * @param {JiraError} error
+ * @param {number} attempt - 1-based
+ * @returns {number} milliseconds
+ */
+function retryDelayMs(error, attempt) {
+  if (error.retryAfterMs != null) return Math.min(error.retryAfterMs, 30000);
+  const base = Math.min(1000 * 2 ** (attempt - 1), 8000);
+  return base + Math.floor(Math.random() * 250);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

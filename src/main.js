@@ -593,7 +593,7 @@ async function renderConnected(user, initialView = 'product', filters = {}) {
             <span class="nav-item-label">Theme</span>
           </button>
           <button class="sidebar-collapse-btn" id="sidebar-collapse-btn">
-            <span>◀</span>
+            <span>▶</span>
             <span class="nav-item-label">Collapse</span>
           </button>
         </div>
@@ -639,9 +639,11 @@ async function renderConnected(user, initialView = 'product', filters = {}) {
     const btn = document.getElementById('sidebar-collapse-btn')
     sidebar?.classList.toggle('collapsed', collapsed)
     if (btn) {
+      // The sidebar is on the right, so it collapses rightward: ▶ to tuck it
+      // away, ◀ to bring it back.
       btn.innerHTML = collapsed
-        ? '<span>▶</span>'
-        : '<span>◀</span><span class="nav-item-label">Collapse</span>'
+        ? '<span>◀</span>'
+        : '<span>▶</span><span class="nav-item-label">Collapse</span>'
       btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar'
     }
   }
@@ -1204,8 +1206,13 @@ async function handleSyncRequest() {
     }
   } catch (error) {
     logger.error('[Sync] Failed:', error)
-    showError(`Sync failed: ${error.message}`)
+    showError(`Sync failed: ${error.message}. Progress was saved — syncing again resumes from where it stopped.`)
     updateSyncStatusUI(false)
+  } finally {
+    // Without this the flag latched on after the first sync, and every later
+    // sync — manual or automatic — returned at the `if (state.isSyncing)`
+    // guard without doing anything.
+    state.isSyncing = false
   }
 }
 

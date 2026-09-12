@@ -232,6 +232,58 @@ export async function getAll(storeName) {
 }
 
 /**
+ * Fetch a specific set of records by primary key, in one transaction.
+ *
+ * Exists because the sync engine only ever needs the ~100 issues in the batch
+ * it is about to write, and getAll() on the issues store reads every cached
+ * issue — each one carrying a multi-kilobyte `raw_data` string. On an instance
+ * with thousands of issues, calling getAll() once per page turned sync into an
+ * O(pages x issues) memory grinder that stalled the tab. Keys not present are
+ * simply absent from the result.
+ *
+ * @param {string} storeName
+ * @param {Array<string|number>} keys
+ * @returns {Promise<object[]>} found records, in no guaranteed order
+ */
+export async function getMany(storeName, keys) {
+  if (!Array.isArray(keys) || keys.length === 0) return [];
+
+  const db = getDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
+    const results = [];
+
+    for (const key of keys) {
+      const request = store.get(key);
+      request.onsuccess = () => {
+        if (request.result !== undefined) results.push(request.result);
+      };
+    }
+
+    tx.oncomplete = () => resolve(results);
+    tx.onerror = () => reject(new Error(tx.error?.message));
+  });
+}
+
+/**
+ * Number of records in a store, without materialising any of them.
+ *
+ * @param {string} storeName
+ * @returns {Promise<number>}
+ */
+export async function count(storeName) {
+  const db = getDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const request = tx.objectStore(storeName).count();
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(new Error(request.error?.message));
+  });
+}
+
+/**
  * Get records by index
  */
 export async function getByIndex(storeName, indexName, value) {

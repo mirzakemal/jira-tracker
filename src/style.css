@@ -53,6 +53,14 @@
   --space-lg: 16px;
   --space-xl: 20px;
   --space-2xl: 24px;
+
+  /* Height of the top band. The sidebar brand row and the top bar both use it,
+     so the two borders meet in a straight line across the top of the app. */
+  --header-h: 54px;
+
+  /* Width of the sidebar when it is reduced to an icon rail — both when
+     collapsed by the user and when the viewport forces it. */
+  --rail-w: 48px;
   --space-3xl: 32px;
   --space-4xl: 48px;
 
@@ -267,10 +275,15 @@ a { color: var(--primary); }
 
 /* ── Sidebar ── */
 .app-sidebar {
+  /* Sits to the RIGHT of the main content. `order` rather than
+     `flex-direction: row-reverse` on the container, so the DOM order (and
+     with it tab order and screen-reader order) is untouched and no other
+     child of .app-container is affected. */
+  order: 2;
   width: 232px;
   min-width: 232px;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -279,15 +292,43 @@ a { color: var(--primary); }
   z-index: 100;
 }
 
-.app-sidebar.collapsed { width: 60px; min-width: 60px; }
+/* ── Collapsed rail ──
+   Narrower than the old 60px, and the inner padding drops with it so the
+   icons sit close to the screen edge instead of floating in the middle of a
+   wide gutter. Everything below is scoped to .collapsed, so the expanded
+   sidebar keeps its roomier spacing. */
+.app-sidebar.collapsed { width: var(--rail-w); min-width: var(--rail-w); }
+
+.collapsed .sidebar-nav { padding: var(--space-sm) var(--space-xs); }
+.collapsed .sidebar-footer { padding: var(--space-xs); }
+
+/* No label to sit beside, so the icon centres in the rail rather than being
+   pushed off-centre by left-aligned padding and a now-empty gap. */
+.collapsed .sidebar-brand,
+.collapsed .nav-item,
+.collapsed .sidebar-collapse-btn {
+  justify-content: center;
+  gap: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The active accent sits 9px outside the nav item, which the narrower padding
+   would clip to a 1–2px sliver. Hidden outright in the rail — the background
+   pill and the tinted icon already carry the active state. */
+.collapsed .nav-item::before { display: none; }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  padding: var(--space-lg) var(--space-lg);
+  /* Block padding comes from the shared header height instead of a fixed
+     16px, which left this row 19px taller than the bar beside it. */
+  min-height: var(--header-h);
+  padding: 0 var(--space-lg);
   border-bottom: 1px solid var(--border-light);
   user-select: none;
+  flex-shrink: 0;
 }
 
 .sidebar-brand-icon {
@@ -424,13 +465,18 @@ a { color: var(--primary); }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-md) var(--space-2xl);
+  /* Tightened from 12px/60px. The tallest thing in here is the sync button
+     (~32px), so 8px of block padding clears it without the bar reserving
+     space nothing uses. min-height is now a floor, not the driver. */
+  padding: var(--space-sm) var(--space-2xl);
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
   -webkit-backdrop-filter: saturate(180%) blur(12px);
   flex-shrink: 0;
-  min-height: 60px;
+  /* min-, not a fixed height: the bar must still be able to grow if its
+     contents wrap rather than clipping them. */
+  min-height: var(--header-h);
 }
 
 .top-bar-left { display: flex; align-items: center; gap: var(--space-lg); }
@@ -847,9 +893,28 @@ a { color: var(--primary); }
 @media (max-width: 768px) {
   .app-container { padding: 0; }
 
+  /* Narrow viewports get the rail whether or not the user collapsed it. This
+     block also has to repeat the rail treatment, because the rules above are
+     scoped to .collapsed, which the viewport does not add — without it the
+     labels were rendered and then clipped mid-word by overflow-x: hidden. */
   .app-sidebar {
-    width: 60px;
-    min-width: 60px;
+    width: var(--rail-w);
+    min-width: var(--rail-w);
+  }
+
+  .app-sidebar .sidebar-nav { padding: var(--space-sm) var(--space-xs); }
+  .app-sidebar .sidebar-footer { padding: var(--space-xs); }
+  .app-sidebar .sidebar-brand-text,
+  .app-sidebar .nav-item-label { opacity: 0; width: 0; overflow: hidden; }
+  .app-sidebar .nav-section-title { opacity: 0; height: 0; padding: 0; margin: 0; overflow: hidden; }
+  .app-sidebar .nav-item::before { display: none; }
+  .app-sidebar .sidebar-brand,
+  .app-sidebar .nav-item,
+  .app-sidebar .sidebar-collapse-btn {
+    justify-content: center;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .app-header {

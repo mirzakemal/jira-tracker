@@ -556,11 +556,15 @@ export const badgeBaseStyles = `
 // ============================================================================
 
 export const panelBaseStyles = `
+  /* .sync-status is deliberately NOT in this list. It only ever renders inside
+     .top-bar, where the panel treatment gave it a border, a shadow and 16px of
+     padding on all sides — a card floating inside a bar that already has its
+     own border and background. That padding, not the bar's own, was what made
+     the header tall. */
   .panel,
   .settings-panel,
   .board-selector,
   .roadmap-toolbar,
-  .sync-status,
   .table-view,
   .roadmap-timeline {
     background: var(--surface);
@@ -616,6 +620,21 @@ export const panelBaseStyles = `
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  /* Shown when a previous sync stopped before finishing. Warning-toned rather
+     than error-toned: the data on screen is still valid, just incomplete. */
+  .sync-resume {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: var(--radius-sm, 4px);
+    background: var(--warning-bg, rgba(217, 119, 6, 0.12));
+    color: var(--warning, #b45309);
+    border: 1px solid rgba(217, 119, 6, 0.25);
+    font-size: 12px;
+    white-space: nowrap;
   }
 `
 
