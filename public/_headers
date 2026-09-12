@@ -1,0 +1,24 @@
+# Header rules for static hosts that read this file (Netlify, Cloudflare Pages).
+#
+# IMPORTANT: a pure static host cannot solve the Atlassian CORS problem — the
+# browser still calls atlassian.net cross-origin and is blocked. Use one of
+# these hosts only if you also put a proxy (worker/function) in front of
+# /rest, /agile and /wiki. deploy/nginx.conf does both in one place.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.atlassian.net https://secure.gravatar.com https://*.atl-paas.net; font-src 'self'; connect-src 'self' https://*.atlassian.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Fingerprinted by Vite — safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Must never be stale, or a released fix cannot reach an already-registered worker.
+/sw.js
+  Cache-Control: no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache

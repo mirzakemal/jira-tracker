@@ -3,7 +3,7 @@
  * Renders issues as horizontal bars on a timeline with swimlanes
  */
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { formatDate } from '../utils/date.js';
 
 export class RoadmapTimeline {
@@ -277,7 +277,7 @@ export class RoadmapTimeline {
       const pos = this.getDatePosition(new Date(m.date));
       if (pos < 0 || pos > 100) return '';
       return `
-        <div class="milestone-marker" style="left: ${pos}%;" title="${escapeHtml(m.name)} — ${formatDate(m.date)}">
+        <div class="milestone-marker" style="left: ${pos}%;" title="${escapeAttr(m.name)} — ${formatDate(m.date)}">
           <div class="milestone-flag">${escapeHtml(m.name)}</div>
         </div>
       `;
@@ -366,9 +366,9 @@ export class RoadmapTimeline {
     const headerText = showName ? epic.name : epic.key;
 
     return `
-      <div class="timeline-swimlane" data-epic-key="${escapeHtml(epic.key)}">
+      <div class="timeline-swimlane" data-epic-key="${escapeAttr(epic.key)}">
         <div class="swimlane-header">
-          <span class="swimlane-title" title="${escapeHtml(epic.name)}">
+          <span class="swimlane-title" title="${escapeAttr(epic.name)}">
             ${escapeHtml(headerText)}
           </span>
           <span class="swimlane-count">${issues.length} issue${issues.length !== 1 ? 's' : ''}</span>
@@ -476,9 +476,9 @@ export class RoadmapTimeline {
 
       return `
         <div class="issue-milestone ${statusColor}"
-             data-issue-key="${escapeHtml(issue.key)}"
+             data-issue-key="${escapeAttr(issue.key)}"
              style="left: ${pos}%; top: ${topPosition}px; z-index: ${5 + row};"
-             title="${escapeHtml(`${issue.key}: ${issue.summary || ''}\nStatus: ${issue.status || 'Unknown'}\nNo date range — estimated from created date`)}">
+             title="${escapeAttr(`${issue.key}: ${issue.summary || ''}\nStatus: ${issue.status || 'Unknown'}\nNo date range — estimated from created date`)}">
           <span class="milestone-key">${escapeHtml(issue.key)}</span>
         </div>
       `;
@@ -522,15 +522,15 @@ export class RoadmapTimeline {
     return `
       <div class="issue-bar ${colorClass} ${extendsClass} ${startOverflowClass} ${narrowClass} ${tinyClass}"
            role="button"
-           aria-label="${escapeHtml(issue.key)}: ${escapeHtml(issue.summary || '')}"
+           aria-label="${escapeAttr(issue.key)}: ${escapeAttr(issue.summary || '')}"
            tabindex="0"
-           data-issue-key="${escapeHtml(issue.key)}"
-           data-issue-summary="${escapeHtml(issue.summary || '')}"
-           data-issue-status="${escapeHtml(issue.status || '')}"
-           data-issue-assignee="${escapeHtml(issue.assignee_name || '')}"
-           data-issue-start="${escapeHtml(issue.start_date || '')}"
-           data-issue-due="${escapeHtml(issue.due_date || '')}"
-           data-swimlane="${escapeHtml(issue.parent_key || issue.epic_key || 'no-epic')}"
+           data-issue-key="${escapeAttr(issue.key)}"
+           data-issue-summary="${escapeAttr(issue.summary || '')}"
+           data-issue-status="${escapeAttr(issue.status || '')}"
+           data-issue-assignee="${escapeAttr(issue.assignee_name || '')}"
+           data-issue-start="${escapeAttr(issue.start_date || '')}"
+           data-issue-due="${escapeAttr(issue.due_date || '')}"
+           data-swimlane="${escapeAttr(issue.parent_key || issue.epic_key || 'no-epic')}"
            style="left: ${position}%; width: ${width}%; top: ${topPosition}px; z-index: ${5 + row};">
         <div class="issue-bar-fill" style="width: ${fillPct}%;"></div>
         <span class="issue-bar-key">${escapeHtml(issue.key)}</span>
@@ -604,9 +604,9 @@ export class RoadmapTimeline {
           return `
             <div class="sprint-overlay-bar ${startOverflowClass}"
                  role="button"
-                 aria-label="${escapeHtml(sprint.name)}: ${sprint.issueCount} issues"
+                 aria-label="${escapeAttr(sprint.name)}: ${sprint.issueCount} issues"
                  style="left: ${sprint.position}%; width: ${sprint.width}%; top: ${topPosition}px;"
-                 title="${escapeHtml(sprint.name)}
+                 title="${escapeAttr(sprint.name)}
                         ${sprint.start_date ? '\nStart: ' + formatDate(sprint.start_date) : ''}
                         ${sprint.end_date ? '\nEnd: ' + formatDate(sprint.end_date) : ''}
                         \nIssues: ${sprint.issueCount} / ${sprint.capacity}">
@@ -640,9 +640,9 @@ export class RoadmapTimeline {
         ${this._unscheduledOpen ? `
           <div class="unscheduled-list">
             ${unscheduled.map(issue => `
-              <div class="unscheduled-item" data-issue-key="${escapeHtml(issue.key)}">
+              <div class="unscheduled-item" data-issue-key="${escapeAttr(issue.key)}">
                 <span class="unscheduled-key">${escapeHtml(issue.key)}</span>
-                <span class="unscheduled-summary" title="${escapeHtml(issue.summary || '')}">${escapeHtml(issue.summary || '')}</span>
+                <span class="unscheduled-summary" title="${escapeAttr(issue.summary || '')}">${escapeHtml(issue.summary || '')}</span>
                 <span class="unscheduled-status">${escapeHtml(issue.status || 'No status')}</span>
                 ${issue.assignee_name ? `<span class="unscheduled-assignee">${escapeHtml(issue.assignee_name)}</span>` : ''}
               </div>
@@ -926,7 +926,7 @@ export const RoadmapTimelineStyles = `
   }
 
   .timeline-column-label {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 700;
     color: var(--text-secondary, #888);
     text-transform: uppercase;
@@ -980,14 +980,14 @@ export const RoadmapTimelineStyles = `
     left: 4px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 18px;
+    font-size: 20.5px;
     font-weight: bold;
     color: var(--accent, #4f8cff);
     animation: pulse 2s infinite;
   }
 
   .sprint-overlay-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--accent, #4f8cff);
     padding: 4px 8px;
     white-space: nowrap;
@@ -1003,7 +1003,7 @@ export const RoadmapTimelineStyles = `
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 500;
     color: var(--text-secondary, #888);
     border-right: 1px solid var(--border, #333);
@@ -1047,14 +1047,14 @@ export const RoadmapTimelineStyles = `
   .swimlane-title {
     font-weight: 600;
     color: var(--text);
-    font-size: 13px;
+    font-size: 15px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .swimlane-count {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     margin-top: 3px;
     font-weight: 500;
@@ -1089,7 +1089,7 @@ export const RoadmapTimelineStyles = `
     overflow: hidden;
     white-space: nowrap;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-    font-size: 11px;
+    font-size: 12.5px;
     line-height: 1.2;
     gap: 1px;
     box-sizing: border-box;
@@ -1116,13 +1116,13 @@ export const RoadmapTimelineStyles = `
 
   .issue-bar-key {
     font-weight: 600;
-    font-size: 11px;
+    font-size: 12.5px;
     opacity: 1;
     text-shadow: 0 1px 2px rgba(0,0,0,0.2);
   }
 
   .issue-bar-summary {
-    font-size: 10px;
+    font-size: 11.5px;
     opacity: 0.85;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1153,7 +1153,7 @@ export const RoadmapTimelineStyles = `
     top: -16px;
     left: 50%;
     transform: translateX(-50%) rotate(-45deg);
-    font-size: 9px;
+    font-size: 10.5px;
     font-weight: 600;
     white-space: nowrap;
     opacity: 0;
@@ -1175,7 +1175,7 @@ export const RoadmapTimelineStyles = `
     right: 1px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: bold;
     animation: pulse 2s infinite;
     opacity: 0.7;
@@ -1187,7 +1187,7 @@ export const RoadmapTimelineStyles = `
     left: 1px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: bold;
     animation: pulse 2s infinite;
     opacity: 0.7;
@@ -1216,7 +1216,7 @@ export const RoadmapTimelineStyles = `
     position: absolute;
     top: 2px;
     left: 6px;
-    font-size: 10px;
+    font-size: 11.5px;
     font-weight: 600;
     color: var(--danger, #ef4444);
     white-space: nowrap;
@@ -1253,7 +1253,7 @@ export const RoadmapTimelineStyles = `
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s ease;
-    font-size: 12px;
+    font-size: 14px;
     backdrop-filter: blur(8px);
   }
 
@@ -1263,7 +1263,7 @@ export const RoadmapTimelineStyles = `
 
   .issue-tooltip .tooltip-key {
     font-weight: 700;
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text);
     margin-bottom: 4px;
   }
@@ -1278,13 +1278,13 @@ export const RoadmapTimelineStyles = `
     display: flex;
     gap: 10px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 12.5px;
     margin-bottom: 4px;
   }
 
   .issue-tooltip .tooltip-dates {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 12.5px;
   }
 
   /* Unscheduled bucket */
@@ -1305,7 +1305,7 @@ export const RoadmapTimelineStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text);
     font-family: inherit;
@@ -1317,7 +1317,7 @@ export const RoadmapTimelineStyles = `
   }
 
   .unscheduled-toggle .toggle-arrow {
-    font-size: 12px;
+    font-size: 14px;
     transition: transform 0.2s;
     color: var(--text-secondary);
   }
@@ -1337,7 +1337,7 @@ export const RoadmapTimelineStyles = `
     padding: 8px 16px;
     cursor: pointer;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 15px;
     transition: background 0.15s;
   }
 
@@ -1364,7 +1364,7 @@ export const RoadmapTimelineStyles = `
   }
 
   .unscheduled-status {
-    font-size: 11px;
+    font-size: 12.5px;
     padding: 2px 8px;
     border-radius: 12px;
     background: var(--hover);
@@ -1373,7 +1373,7 @@ export const RoadmapTimelineStyles = `
   }
 
   .unscheduled-assignee {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     white-space: nowrap;
   }
@@ -1447,7 +1447,7 @@ export const RoadmapTimelineStyles = `
   }
   .roadmap-timeline.compact .issue-bar {
     height: 20px;
-    font-size: 9px;
+    font-size: 10.5px;
     padding: 1px 4px;
   }
   .roadmap-timeline.compact .issue-bar .issue-bar-summary {
@@ -1490,7 +1490,7 @@ export const RoadmapTimelineStyles = `
     left: 6px;
     background: var(--primary, #6366f1);
     color: white;
-    font-size: 10px;
+    font-size: 11.5px;
     font-weight: 600;
     padding: 2px 8px;
     border-radius: 4px;

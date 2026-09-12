@@ -1,0 +1,63 @@
+name: CI
+
+# Every push and PR. The app ships as a static bundle, so "does it lint, pass
+# its tests, and build" is the whole gate.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A newer push supersedes an in-flight run on the same ref.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `npm ci` over `npm install`: fails loudly if the lockfile and
+      # package.json disagree, rather than quietly resolving something else.
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run test:run
+      - run: npm run build
+
+      # A bundle that builds but does not boot is still broken. This catches
+      # the obvious case: an entry chunk that never got written.
+      - name: Check the bundle looks sane
+        run: |
+          test -f dist/index.html || { echo "no dist/index.html"; exit 1; }
+          test -d dist/assets || { echo "no dist/assets"; exit 1; }
+          grep -q 'assets/index-.*\.js' dist/index.html \
+            || { echo "index.html does not reference an entry bundle"; exit 1; }
+          echo "bundle size: $(du -sh dist | cut -f1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
+  # Production dependencies only. The dev toolchain has its own advisories that
+  # never reach a user's browser, so failing the build on those would be noise.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high

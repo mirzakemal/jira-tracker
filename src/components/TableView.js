@@ -4,7 +4,7 @@
  */
 
 import logger from '../utils/logger.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { formatDate } from '../utils/date.js';
 
 export class TableView {
@@ -367,7 +367,7 @@ export class TableView {
         return `<span class="issue-key">${escapeHtml(value)}</span>`;
 
       case 'summary':
-        return `<span class="issue-summary" title="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+        return `<span class="issue-summary" title="${escapeAttr(value)}">${escapeHtml(value)}</span>`;
 
       case 'priority':
         return `<span class="priority-badge ${this.getPriorityClass(value)}">${escapeHtml(value)}</span>`;
@@ -411,7 +411,7 @@ export class TableView {
     }
 
     return tags.map(tag => `
-      <span class="tag-badge" data-tag="${escapeHtml(tag)}">
+      <span class="tag-badge" data-tag="${escapeAttr(tag)}">
         ${escapeHtml(tag)}
       </span>
     `).join('');
@@ -555,9 +555,9 @@ export class TableView {
             ${tags.length === 0
               ? '<p class="no-tags">No tags yet</p>'
               : tags.map(tag => `
-                  <span class="tag-badge" data-tag="${escapeHtml(tag)}">
+                  <span class="tag-badge" data-tag="${escapeAttr(tag)}">
                     ${escapeHtml(tag)}
-                    <button class="tag-remove" data-tag="${escapeHtml(tag)}">&times;</button>
+                    <button class="tag-remove" data-tag="${escapeAttr(tag)}">&times;</button>
                   </span>
                 `).join('')
             }
@@ -571,7 +571,7 @@ export class TableView {
               list="tags-datalist"
             />
             <datalist id="tags-datalist">
-              ${knownTags.map(tag => `<option value="${escapeHtml(tag)}">`).join('')}
+              ${knownTags.map(tag => `<option value="${escapeAttr(tag)}">`).join('')}
             </datalist>
             <button class="btn btn-primary" id="add-tag-btn">Add Tag</button>
           </div>
@@ -635,9 +635,9 @@ export class TableView {
           existingContainer.innerHTML = newTags.length === 0
             ? '<p class="no-tags">No tags yet</p>'
             : newTags.map(tag => `
-                <span class="tag-badge" data-tag="${escapeHtml(tag)}">
+                <span class="tag-badge" data-tag="${escapeAttr(tag)}">
                   ${escapeHtml(tag)}
-                  <button class="tag-remove" data-tag="${escapeHtml(tag)}">&times;</button>
+                  <button class="tag-remove" data-tag="${escapeAttr(tag)}">&times;</button>
                 </span>
               `).join('');
         }
@@ -670,9 +670,9 @@ export class TableView {
         existingContainer.innerHTML = updatedTags.length === 0
           ? '<p class="no-tags">No tags yet</p>'
           : updatedTags.map(t => `
-              <span class="tag-badge" data-tag="${escapeHtml(t)}">
+              <span class="tag-badge" data-tag="${escapeAttr(t)}">
                 ${escapeHtml(t)}
-                <button class="tag-remove" data-tag="${escapeHtml(t)}">&times;</button>
+                <button class="tag-remove" data-tag="${escapeAttr(t)}">&times;</button>
               </span>
             `).join('');
       } catch (error) {
@@ -740,7 +740,7 @@ export const TableViewStyles = `
   .issues-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .issues-table thead {
@@ -826,7 +826,7 @@ export const TableViewStyles = `
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
   }
 
@@ -847,7 +847,7 @@ export const TableViewStyles = `
     padding: 4px 8px;
     background: var(--hover);
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 14px;
     white-space: nowrap;
   }
 
@@ -872,19 +872,19 @@ export const TableViewStyles = `
     background: var(--primary-bg);
     color: var(--primary);
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 500;
   }
 
   .tags-cell .no-tags {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     font-style: italic;
   }
 
   .date-value {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .empty-value {
@@ -893,7 +893,7 @@ export const TableViewStyles = `
   }
 
   .customizer-note {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text-secondary);
     margin-bottom: 12px;
     font-style: italic;
@@ -926,7 +926,7 @@ export const TableViewStyles = `
   }
 
   .column-option .permanent-badge {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     font-style: italic;
     margin-left: auto;
@@ -949,7 +949,7 @@ export const TableViewStyles = `
     padding: 6px 10px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 15px;
     transition: background 0.2s ease;
   }
 
@@ -963,7 +963,7 @@ export const TableViewStyles = `
   }
 
   .pagination-info {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text-secondary);
     min-width: 100px;
     text-align: center;

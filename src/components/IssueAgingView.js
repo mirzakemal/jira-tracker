@@ -251,7 +251,7 @@ export const IssueAgingViewStyles = `
 .aging-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
 }
 .aging-table th {
   text-align: left;
@@ -260,7 +260,7 @@ export const IssueAgingViewStyles = `
   background: var(--surface);
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .aging-table td {
@@ -310,11 +310,11 @@ export const IssueAgingViewStyles = `
 }
 .aging-date {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .sort-arrow {
-  font-size: 11px;
+  font-size: 12.5px;
   margin-left: 4px;
 }
 .sort-arrow.neutral { color: var(--text-muted); }

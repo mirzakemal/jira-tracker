@@ -1,4 +1,5 @@
 import logger from './logger.js';
+import { usesServerAuth } from './auth-mode.js';
 
 /**
  * Local Storage Utilities
@@ -38,9 +39,22 @@ async function deriveKey(domain, email, salt) {
 }
 
 /**
- * Encrypt and save credentials to localStorage
+ * Encrypt and save credentials to localStorage.
+ *
+ * NOTE: the AES-GCM key is derived from domain+email, neither of which is
+ * secret, so this is obfuscation rather than encryption — it stops casual
+ * reading of localStorage, not an attacker with access to the machine or an
+ * XSS. Set VITE_AUTH_MODE=proxy to keep tokens out of the browser entirely.
  */
 export async function saveCredentials({ domain, email, token }) {
+  // Under server auth the proxy owns the credential. Writing one here would
+  // put a token back in the browser — the exact thing that mode exists to
+  // prevent — so refuse rather than silently storing it.
+  if (usesServerAuth()) {
+    logger.warn('[Storage] Ignoring credential write: the proxy holds the credential');
+    return false;
+  }
+
   try {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const key = await deriveKey(domain, email, salt);

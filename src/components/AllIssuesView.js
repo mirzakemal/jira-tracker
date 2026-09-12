@@ -469,7 +469,7 @@ export const AllIssuesViewStyles = `
     color: var(--text-secondary);
     border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
     transition: all 0.2s ease;
   }
 

@@ -1,12 +1,13 @@
 /**
  * Jira Planner Service Worker
- * Offline-first caching strategy with stale-while-revalidate for static assets
- * and network-first for API data with offline fallback
+ * Stale-while-revalidate for the app shell. API requests are NOT intercepted:
+ * the app's offline story is its IndexedDB cache, not this worker.
  */
 
-const CACHE_VERSION = 'v1';
+// Bumped to v2: purges the old caches, which held authenticated Jira API
+// responses that v2 no longer stores at all.
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `jira-planner-static-${CACHE_VERSION}`;
-const API_CACHE = `jira-planner-api-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   '/',
@@ -30,7 +31,9 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter(name => name.startsWith('jira-planner-') && name !== STATIC_CACHE && name !== API_CACHE)
+          // Anything that isn't the current static cache goes — including the
+          // old jira-planner-api-* caches of authenticated Jira responses.
+          .filter(name => name.startsWith('jira-planner-') && name !== STATIC_CACHE)
           .map(name => caches.delete(name))
       );
     })
@@ -49,13 +52,26 @@ self.addEventListener('fetch', (event) => {
   // Skip browser extensions and chrome-extension URLs
   if (!url.protocol.startsWith('http')) return;
 
-  // API requests (to Jira or local proxy): network first, cache fallback
+  // API requests (Jira/Confluence, direct or via the dev proxy): pass straight
+  // through to the network.
+  //
+  // This worker used to race them against an 8s timeout and, on loss, return a
+  // synthetic 503. Two problems with that:
+  //   1. api/jira.js maps any 5xx to "Jira server error. Please try again
+  //      later", so a slow-but-healthy Jira was reported as a server fault.
+  //   2. It cached authenticated Jira responses in the Cache API, which is both
+  //      redundant (the app's offline story is IndexedDB) and a place for
+  //      someone else's data to sit on disk.
+  //
+  // JiraClient already enforces its own 30s AbortController timeout, and a real
+  // network failure now surfaces as a genuine fetch error the app reports as
+  // "Network error" rather than blaming the server.
   if (
     url.pathname.startsWith('/rest/') ||
     url.pathname.startsWith('/agile/') ||
+    url.pathname.startsWith('/wiki/') ||
     url.pathname.includes('atlassian.net')
   ) {
-    event.respondWith(networkFirstWithOfflineFallback(request));
     return;
   }
 
@@ -64,50 +80,12 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
- * Network-first with offline fallback.
- * Tries network first (with timeout), falls back to cached API response.
- */
-async function networkFirstWithOfflineFallback(request) {
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('timeout')), 8000)
-  );
-
-  try {
-    const response = await Promise.race([
-      fetch(request),
-      timeoutPromise
-    ]);
-
-    // Cache the fresh response for offline use
-    if (response && response.ok) {
-      const cache = await caches.open(API_CACHE);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (error) {
-    // Network failed — try cache
-    const cached = await caches.match(request);
-    if (cached) return cached;
-
-    // No cache hit — return a structured offline response
-    return new Response(
-      JSON.stringify({
-        error: 'offline',
-        message: 'You are offline and no cached data is available for this request.'
-      }),
-      {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
-
-/**
  * Stale-while-revalidate for static assets.
  * Returns cached version immediately, updates cache from network in background.
  */
 async function staleWhileRevalidate(request) {
+  const isNavigation = request.mode === 'navigate';
+
   const cachedResponse = await caches.match(request);
 
   const networkPromise = fetch(request).then((response) => {
@@ -128,7 +106,14 @@ async function staleWhileRevalidate(request) {
   const networkResponse = await networkPromise;
   if (networkResponse) return networkResponse;
 
-  // Completely offline and no cache — show offline page
+  // An asset (script, style, image) with no cache and no network: let it fail
+  // as a network error. Returning an HTML offline page in its place would be
+  // parsed as that asset and produce a far more confusing failure.
+  if (!isNavigation) {
+    return Response.error();
+  }
+
+  // A navigation with nothing cached — show the offline page.
   return new Response(
     `<!DOCTYPE html>
     <html lang="en">

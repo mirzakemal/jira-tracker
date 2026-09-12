@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 
 export class TeamWorkloadView {
   constructor(client, jiraDomain, onBack) {
@@ -116,7 +116,7 @@ export class TeamWorkloadView {
                 <tr>
                   <th class="heatmap-person-header">Team Member</th>
                   <th class="heatmap-total-header">Total</th>
-                  ${statuses.map(s => `<th class="heatmap-status-header" title="${escapeHtml(s)}">${escapeHtml(s.length > 12 ? s.substring(0, 12) + '…' : s)}</th>`).join('')}
+                  ${statuses.map(s => `<th class="heatmap-status-header" title="${escapeAttr(s)}">${escapeHtml(s.length > 12 ? s.substring(0, 12) + '…' : s)}</th>`).join('')}
                 </tr>
               </thead>
               <tbody>
@@ -140,8 +140,8 @@ export class TeamWorkloadView {
                       return `
                         <td class="heatmap-cell ${count > 0 ? 'has-issues ' + intensityClass : ''}"
                             style="--intensity: ${intensity}%"
-                            data-person="${escapeHtml(person.id)}"
-                            data-status="${escapeHtml(status)}"
+                            data-person="${escapeAttr(person.id)}"
+                            data-status="${escapeAttr(status)}"
                             data-count="${count}"
                             aria-label="${count} issues in ${status} for ${person.name}">
                           ${count > 0 ? `<span class="cell-count">${count}</span>` : '<span class="cell-empty">-</span>'}
@@ -252,7 +252,7 @@ export class TeamWorkloadView {
     title.textContent = `${statusData.count} issues for ${person.name} — ${statusData.status}`;
     issues.innerHTML = statusData.issues.map(i => `
       <div class="popup-issue-item">
-        <a href="#" class="popup-issue-key" data-issue-key="${escapeHtml(i.key)}">${escapeHtml(i.key)}</a>
+        <a href="#" class="popup-issue-key" data-issue-key="${escapeAttr(i.key)}">${escapeHtml(i.key)}</a>
         <span class="popup-issue-summary">${escapeHtml(i.summary || '')}</span>
         <span class="popup-issue-meta">
           ${i.priority ? `<span class="priority-badge">${escapeHtml(i.priority)}</span>` : ''}
@@ -300,7 +300,7 @@ export const TeamWorkloadViewStyles = `
   }
   .workload-view h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: 23px;
     color: var(--text);
   }
   .workload-filters {
@@ -314,7 +314,7 @@ export const TeamWorkloadViewStyles = `
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
-    font-size: 13px;
+    font-size: 15px;
     cursor: pointer;
   }
   .workload-summary {
@@ -331,12 +331,12 @@ export const TeamWorkloadViewStyles = `
     min-width: 120px;
   }
   .summary-value {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 700;
     color: var(--primary);
   }
   .summary-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     margin-top: 4px;
     text-transform: uppercase;
@@ -351,7 +351,7 @@ export const TeamWorkloadViewStyles = `
   .heatmap-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 15px;
     min-width: 600px;
   }
   .heatmap-table thead {
@@ -392,7 +392,7 @@ export const TeamWorkloadViewStyles = `
     gap: 4px;
   }
   .person-name {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text);
   }
@@ -411,7 +411,7 @@ export const TeamWorkloadViewStyles = `
   .heatmap-total {
     text-align: center;
     color: var(--text);
-    font-size: 14px;
+    font-size: 16px;
   }
   .heatmap-cell {
     text-align: center;
@@ -435,11 +435,11 @@ export const TeamWorkloadViewStyles = `
   }
   .cell-count {
     display: block;
-    font-size: 13px;
+    font-size: 15px;
   }
   .cell-empty {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 14px;
   }
   .workload-popup {
     position: fixed;
@@ -464,13 +464,13 @@ export const TeamWorkloadViewStyles = `
     border-bottom: 1px solid var(--border);
     font-weight: 600;
     color: var(--text);
-    font-size: 14px;
+    font-size: 16px;
   }
   .popup-close {
     background: none;
     border: none;
     color: var(--text-secondary);
-    font-size: 20px;
+    font-size: 23px;
     cursor: pointer;
     padding: 0 4px;
   }
@@ -488,7 +488,7 @@ export const TeamWorkloadViewStyles = `
     gap: 8px;
     padding: 8px 0;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 15px;
   }
   .popup-issue-item:last-child {
     border-bottom: none;
@@ -515,7 +515,7 @@ export const TeamWorkloadViewStyles = `
     align-items: center;
   }
   .priority-badge, .type-badge {
-    font-size: 10px;
+    font-size: 11.5px;
     padding: 1px 6px;
     border-radius: 3px;
     background: var(--hover);

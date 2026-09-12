@@ -134,4 +134,75 @@ describe('IssueCard', () => {
     expect(html).toContain('issue-unassigned');
     expect(html).toContain('Unassigned');
   });
+
+  it('a quote in Jira text cannot break out of an attribute', () => {
+    // escapeHtml serialises via textContent -> innerHTML, which does NOT escape
+    // quotes, so attribute interpolation must use escapeAttr. Otherwise this
+    // payload closes title="..." and becomes a real event handler.
+    const payload = '" onmouseover="alert(1)';
+    const issue = {
+      key: 'TEST-1',
+      fields: {
+        summary: payload,
+        priority: { name: payload },
+        issuetype: { name: payload },
+        assignee: { displayName: payload, avatarUrls: { '24x24': payload } }
+      }
+    };
+
+    document.body.innerHTML = new IssueCard(issue).render();
+
+    // Assert against the parsed DOM, not the string: no extra attribute exists.
+    const summary = document.querySelector('.issue-summary');
+    expect(summary.getAttributeNames().sort()).toEqual(['class', 'title']);
+    expect(summary.getAttribute('title')).toBe(payload);
+
+    expect(document.querySelector('.issue-priority').getAttributeNames().sort())
+      .toEqual(['class', 'title']);
+    expect(document.querySelector('.issue-type-icon').getAttributeNames().sort())
+      .toEqual(['class', 'title']);
+    expect(document.querySelector('.issue-assignee').getAttributeNames().sort())
+      .toEqual(['alt', 'class', 'src', 'title']);
+
+    // Nothing anywhere in the card picked up an inline handler.
+    expect(document.querySelectorAll('[onmouseover]').length).toBe(0);
+
+    document.body.innerHTML = '';
+  });
+});
+
+describe('IssueDetailDrawer epic links', () => {
+  function drawerWith(issuetypeName) {
+    return {
+      fields: {
+        issuelinks: [{
+          type: { name: 'Polaris work item link', inward: 'is implemented by' },
+          inwardIssue: {
+            key: 'TSM2-7759',
+            fields: { summary: 'Supplier-Side Combined-GR Invoicing', issuetype: { name: issuetypeName } }
+          }
+        }]
+      }
+    };
+  }
+
+  it('rings an epic link in the detail modal', async () => {
+    const { IssueDetailDrawer } = await import('../components/IssueDetailDrawer.js');
+    const drawer = new IssueDetailDrawer('PDT-39', 'example.atlassian.net', () => {});
+    drawer.parsedRaw = drawerWith('Epic');
+
+    document.body.innerHTML = drawer.renderLinkedIssues();
+    const item = document.querySelector('.linked-issue-item');
+    expect(item.classList.contains('linked-issue-epic')).toBe(true);
+    expect(item.getAttribute('title')).toBe('Epic');
+  });
+
+  it('leaves a non-epic link unmarked', async () => {
+    const { IssueDetailDrawer } = await import('../components/IssueDetailDrawer.js');
+    const drawer = new IssueDetailDrawer('PDT-39', 'example.atlassian.net', () => {});
+    drawer.parsedRaw = drawerWith('Task');
+
+    document.body.innerHTML = drawer.renderLinkedIssues();
+    expect(document.querySelector('.linked-issue-epic')).toBeNull();
+  });
 });

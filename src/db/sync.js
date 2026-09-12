@@ -11,10 +11,14 @@ import {
   setMetadata,
   getMetadata,
   clear,
+  deleteByIndex,
   STORE_NAMES as STORES
 } from './indexeddb.js';
 
-import { CUSTOM_FIELDS, FIELD_PATTERNS } from '../jira-config.js';
+import { CUSTOM_FIELDS } from '../jira-config.js';
+import { resolveCustomFieldIds, defaultCustomFieldIds } from './field-resolver.js';
+import { PRODUCT_PROJECT_KEY } from '../product-config.js';
+import { syncProductBoard } from './product-sync.js';
 
 /**
  * Sync all data from Jira
@@ -28,9 +32,16 @@ export async function syncAll(client) {
     await clear(STORES.CHANGELOG);
     await clear(STORES.ISSUELINKS);
 
+    await loadFieldIds(client);
     await syncProjects(client);
     await syncAllBoards(client);
     await syncAllSprints(client, warnings);
+
+    // syncAllBoards() walks every accessible board, so both the Product and
+    // Engineering boards are already cached by this point. Refresh the product
+    // issues' links authoritatively, then reconcile the Product Board.
+    await syncProductIssueLinks(client, warnings);
+    const productBoard = await reconcileProductBoard(warnings);
 
     await setMetadata('last_full_sync', new Date().toISOString());
     await setMetadata('last_sync', new Date().toISOString());
@@ -38,7 +49,7 @@ export async function syncAll(client) {
     const changeCount = await countChangelogEntries();
 
     logger.info(`[Sync] Full sync completed with ${changeCount} changes`);
-    return { success: true, timestamp: new Date(), changeCount, warnings };
+    return { success: true, timestamp: new Date(), changeCount, warnings, productBoard };
   } catch (error) {
     logger.error('[Sync] Full sync failed:', error);
     throw error;
@@ -55,23 +66,162 @@ export async function syncIncremental(client) {
   try {
     await initDatabase();
     await clear(STORES.CHANGELOG);
-    await clear(STORES.ISSUELINKS);
+    // NOTE: issuelinks is deliberately NOT cleared here. An incremental sync
+    // only refetches issues updated since the last run, so wiping the whole
+    // store would strip the links off every issue that happened not to change
+    // — and they would never come back without a full sync. upsertIssues()
+    // replaces links per issue instead.
 
     const lastSync = await getMetadata('last_sync');
 
+    await loadFieldIds(client);
     await syncProjects(client);
     await syncAllBoards(client);
     await syncUpdatedIssues(client, lastSync, warnings);
+
+    await syncProductIssueLinks(client, warnings);
+    const productBoard = await reconcileProductBoard(warnings);;
 
     await setMetadata('last_sync', new Date().toISOString());
 
     const changeCount = await countChangelogEntries();
 
     logger.info(`[Sync] Incremental sync completed with ${changeCount} changes`);
-    return { success: true, timestamp: new Date(), changeCount, warnings };
+    return { success: true, timestamp: new Date(), changeCount, warnings, productBoard };
   } catch (error) {
     logger.error('[Sync] Incremental sync failed:', error);
     throw error;
+  }
+}
+
+/**
+ * Custom field ids for this sync run, resolved from the instance's field list.
+ *
+ * Module-level so upsertIssues() can read it without threading the value
+ * through every call site.
+ */
+let resolvedFieldIds = defaultCustomFieldIds();
+
+/**
+ * Fetch the field list and resolve the ids we detect by name.
+ *
+ * Never throws: field metadata is a nicety, and losing it should degrade to the
+ * configured ids rather than fail the whole sync.
+ *
+ * @param {object} client
+ */
+async function loadFieldIds(client) {
+  try {
+    const fields = await client.getFields();
+    resolvedFieldIds = resolveCustomFieldIds(fields);
+  } catch (error) {
+    logger.warn('[Sync] Could not fetch field metadata, using configured ids:', error.message);
+    resolvedFieldIds = defaultCustomFieldIds();
+  }
+}
+
+/**
+ * Fields Jira embeds about the issue at the other end of a link.
+ *
+ * @param {object} other - link.outwardIssue or link.inwardIssue
+ * @returns {object}
+ */
+function linkTargetSnapshot(other) {
+  const fields = other?.fields || {};
+  return {
+    target_summary: fields.summary || null,
+    target_status: fields.status?.name || null,
+    target_status_category: fields.status?.statusCategory?.name || null,
+    target_type: fields.issuetype?.name || null
+  };
+}
+
+/**
+ * Re-fetch issue links for every Product project issue, straight from the
+ * issue endpoint.
+ *
+ * The board/sprint sweep is not a reliable source of links for these: a board
+ * that has sprints only returns issues assigned to a sprint, and the field set
+ * the agile endpoint returns is not guaranteed to carry `issuelinks`. PDT-39
+ * has four Polaris links in Jira but was showing one — the single row written
+ * from the other end, by whichever linked TSM2 issue happened to sync.
+ *
+ * Scoped to the Product project (tens of issues, not thousands) and asking for
+ * one field, so this stays cheap. Failures are per-issue and non-fatal.
+ *
+ * @param {object} client
+ * @param {string[]} warnings - mutated in place
+ * @returns {Promise<number>} issues whose links were refreshed
+ */
+async function syncProductIssueLinks(client, warnings) {
+  let issues = [];
+  try {
+    issues = await getAll(STORES.ISSUES);
+  } catch (error) {
+    warnings.push(`Could not read cached issues for link refresh: ${error.message}`);
+    return 0;
+  }
+
+  const productIssues = issues.filter(i => i.project_key === PRODUCT_PROJECT_KEY);
+  if (productIssues.length === 0) return 0;
+
+  let refreshed = 0;
+  for (const cached of productIssues) {
+    try {
+      const fresh = await client.getIssue(cached.key, ['issuelinks']);
+      const links = fresh?.fields?.issuelinks;
+      if (!Array.isArray(links)) continue;
+
+      await deleteByIndex(STORES.ISSUELINKS, 'source_key', cached.key);
+
+      const entries = [];
+      for (const link of links) {
+        const linkType = link.type?.name || 'relates to';
+        const other = link.outwardIssue || link.inwardIssue;
+        if (!other?.key) continue;
+        entries.push({
+          source_key: cached.key,
+          target_key: other.key,
+          link_type: linkType,
+          direction: link.outwardIssue ? 'outward' : 'inward',
+          direction_label: (link.outwardIssue ? link.type?.outward : link.type?.inward) || linkType,
+          // Snapshot of the linked issue, straight from the link payload. Jira
+          // embeds its summary/status/type here, so a linked issue that was
+          // never synced on its own still has something to show — without this
+          // an unsynced epic reads as "Not synced" instead of "Epic".
+          ...linkTargetSnapshot(other)
+        });
+      }
+
+      if (entries.length > 0) await putBulk(STORES.ISSUELINKS, entries);
+      refreshed += 1;
+    } catch (error) {
+      logger.warn(`[Sync] Could not refresh links for ${cached.key}:`, error.message);
+    }
+  }
+
+  logger.info(`[Sync] Refreshed links for ${refreshed}/${productIssues.length} ${PRODUCT_PROJECT_KEY} issues`);
+  return refreshed;
+}
+
+/**
+ * Reconcile the Product Board after issues have been cached.
+ *
+ * Never throws: a Product Board problem must not fail an otherwise good Jira
+ * sync, matching how the rest of this module degrades (log + warn).
+ *
+ * @param {string[]} warnings - mutated in place
+ * @returns {Promise<object|null>}
+ */
+async function reconcileProductBoard(warnings) {
+  try {
+    const summary = await syncProductBoard();
+    warnings.push(...summary.warnings);
+    return summary;
+  } catch (error) {
+    logger.error('[Sync] Product board reconciliation failed:', error);
+    warnings.push(`Product board reconciliation failed: ${error.message}`);
+    return null;
   }
 }
 
@@ -339,10 +489,10 @@ async function upsertIssues(issues, boardId, sprintId) {
     let customer = null;
     let product = null;
     let qaTesterId = null;
+    let storyPoints = null;
 
     for (const [key, value] of Object.entries(fields)) {
       if (key.startsWith('customfield_')) {
-        const fieldName = key.toLowerCase();
         if (key === CUSTOM_FIELDS.customer) {
           if (Array.isArray(value)) {
             const customerValues = value.map(v => {
@@ -364,11 +514,19 @@ async function upsertIssues(issues, boardId, sprintId) {
           }
           logger.debug(`[Sync] Issue ${issue.key}: ${CUSTOM_FIELDS.customer} =`, value, '-> customer =', customer);
         }
-        if (FIELD_PATTERNS.product.some(p => fieldName.includes(p)) && typeof value === 'string') {
-          product = value;
+        // Detected fields are resolved to ids once per sync from the field
+        // list — see field-resolver.js. Comparing the patterns against `key`
+        // here could never match, since a key holds no human-readable words.
+        if (key === resolvedFieldIds.product) {
+          if (typeof value === 'string') product = value;
+          else if (value?.value) product = value.value;
+          else if (value?.name) product = value.name;
         }
-        if (FIELD_PATTERNS.qaTester.some(p => fieldName.includes(p))) {
+        if (key === resolvedFieldIds.qaTester) {
           qaTesterId = value?.accountId || null;
+        }
+        if (key === resolvedFieldIds.storyPoints && typeof value === 'number') {
+          storyPoints = value;
         }
         if (key === CUSTOM_FIELDS.codeReviewer1) {
           issue.code_reviewer_1_id = value?.accountId || null;
@@ -409,6 +567,7 @@ async function upsertIssues(issues, boardId, sprintId) {
       customer,
       product,
       qa_tester_id: qaTesterId,
+      story_points: storyPoints,
       sprint_id: sprintId,
       board_id: boardId,
       jira_url: `/browse/${issue.key}`,
@@ -418,6 +577,16 @@ async function upsertIssues(issues, boardId, sprintId) {
   });
 
   await putBulk(STORES.ISSUES, issuesToUpdate);
+
+  // Replace this batch's links. Scoped per issue rather than globally, so an
+  // incremental sync never disturbs links on issues it did not fetch.
+  for (const issue of issues) {
+    try {
+      await deleteByIndex(STORES.ISSUELINKS, 'source_key', issue.key);
+    } catch (error) {
+      logger.warn(`[Sync] Could not clear old links for ${issue.key}:`, error.message);
+    }
+  }
 
   // Extract issue links from raw_data
   const linkEntries = [];
@@ -436,7 +605,8 @@ async function upsertIssues(issues, boardId, sprintId) {
           target_key: link.outwardIssue.key,
           link_type: linkType,
           direction: 'outward',
-          direction_label: linkTypeOutward || linkType
+          direction_label: linkTypeOutward || linkType,
+          ...linkTargetSnapshot(link.outwardIssue)
         });
       }
       if (link.inwardIssue) {
@@ -445,7 +615,8 @@ async function upsertIssues(issues, boardId, sprintId) {
           target_key: link.inwardIssue.key,
           link_type: linkType,
           direction: 'inward',
-          direction_label: linkTypeInward || linkType
+          direction_label: linkTypeInward || linkType,
+          ...linkTargetSnapshot(link.inwardIssue)
         });
       }
     }

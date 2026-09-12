@@ -1,5 +1,5 @@
 import { getDependencyChain } from '../db/queries.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 
 const statusColors = {
   'to do': '#42526e', 'in progress': '#0052cc', 'in review': '#5243aa',
@@ -96,7 +96,7 @@ export class DependencyGraphView {
 
     const indent = depth > 0 ? `style="padding-left:${Math.min(depth * 24, 120)}px"` : '';
     const hasChildren = node.links && node.links.length > 0;
-    const chevron = hasChildren ? `<span class="dep-chevron" data-action="dep-toggle" data-key="${escapeHtml(node.key)}">▼</span>` : `<span class="dep-chevron dep-chevron-empty"></span>`;
+    const chevron = hasChildren ? `<span class="dep-chevron" data-action="dep-toggle" data-key="${escapeAttr(node.key)}">▼</span>` : `<span class="dep-chevron dep-chevron-empty"></span>`;
     const color = statusColor(node.status);
     const isRoot = node.key === this.issueKey;
     const rootClass = isRoot ? ' dep-node-root' : '';
@@ -105,7 +105,7 @@ export class DependencyGraphView {
       <div class="dep-node-row">
         ${chevron}
         ${statusDot(color)}
-        <a class="dep-node-key" data-action="dep-issue" data-key="${escapeHtml(node.key)}" data-summary="${escapeHtml(node.summary || node.key)}">${escapeHtml(node.key)}</a>
+        <a class="dep-node-key" data-action="dep-issue" data-key="${escapeAttr(node.key)}" data-summary="${escapeAttr(node.summary || node.key)}">${escapeHtml(node.key)}</a>
         <span class="dep-node-summary">${escapeHtml(node.summary)}</span>
         ${node.link_type ? `<span class="dep-link-tag">${escapeHtml(node.direction_label || node.link_type)}</span>` : ''}
       </div>`;
@@ -200,31 +200,31 @@ export class DependencyGraphView {
 
 export const DependencyGraphViewStyles = `
 .dep-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
-.dep-back-btn { color: var(--primary); text-decoration: none; font-size: 13px; cursor: pointer; display: inline-block; margin-bottom: 8px; }
+.dep-back-btn { color: var(--primary); text-decoration: none; font-size: 15px; cursor: pointer; display: inline-block; margin-bottom: 8px; }
 .dep-back-btn:hover { text-decoration: underline; }
-.dep-title { margin: 0; font-size: 18px; font-weight: 600; color: var(--text); }
+.dep-title { margin: 0; font-size: 20.5px; font-weight: 600; color: var(--text); }
 .dep-key { color: var(--primary); }
-.dep-summary { margin: 4px 0 0; font-size: 13px; color: var(--text-subtle); }
+.dep-summary { margin: 4px 0 0; font-size: 15px; color: var(--text-subtle); }
 .dep-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; }
-.dep-tab { flex: 1; padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-subtle); border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+.dep-tab { flex: 1; padding: 10px 16px; border: none; background: none; cursor: pointer; font-size: 15px; font-weight: 500; color: var(--text-subtle); border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
 .dep-tab:hover { color: var(--text); }
 .dep-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .dep-tree { padding: 12px 20px 20px; overflow-y: auto; max-height: calc(100vh - 200px); }
-.dep-node { font-size: 13px; }
+.dep-node { font-size: 15px; }
 .dep-node-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 4px; cursor: default; }
 .dep-node-row:hover { background: var(--hover); }
 .dep-node-root .dep-node-row { font-weight: 600; }
-.dep-chevron { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px; color: var(--text-subtle); flex-shrink: 0; user-select: none; }
+.dep-chevron { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 11.5px; color: var(--text-subtle); flex-shrink: 0; user-select: none; }
 .dep-chevron:hover { color: var(--text); }
 .dep-chevron-empty { cursor: default; }
 .dep-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.dep-node-key { color: var(--primary); text-decoration: none; cursor: pointer; font-family: monospace; font-size: 12px; }
+.dep-node-key { color: var(--primary); text-decoration: none; cursor: pointer; font-family: monospace; font-size: 14px; }
 .dep-node-key:hover { text-decoration: underline; }
 .dep-node-summary { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dep-link-tag { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--hover-border); color: var(--text-subtle); flex-shrink: 0; }
+.dep-link-tag { font-size: 12.5px; padding: 1px 6px; border-radius: 3px; background: var(--hover-border); color: var(--text-subtle); flex-shrink: 0; }
 .dep-children {}
-.dep-loading { text-align: center; padding: 40px; color: var(--text-subtle); font-size: 14px; }
+.dep-loading { text-align: center; padding: 40px; color: var(--text-subtle); font-size: 16px; }
 .dep-error { text-align: center; padding: 40px; color: var(--danger); }
-.dep-retry-btn { margin-top: 12px; padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); cursor: pointer; font-size: 13px; color: var(--text); }
+.dep-retry-btn { margin-top: 12px; padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); cursor: pointer; font-size: 15px; color: var(--text); }
 .dep-retry-btn:hover { background: var(--hover); }
 `;

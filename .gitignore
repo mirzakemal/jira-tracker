@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Local env files — never commit real credentials.
+# .env.example IS committed as the documented template.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

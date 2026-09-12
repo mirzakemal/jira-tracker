@@ -230,3 +230,64 @@ describe('JiraClient', () => {
     await expect(client.request('/rest/api/3/myself')).rejects.toThrow('Network error');
   });
 });
+
+describe('JiraClient.getLastChangeAuthor', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  const VALID = { domain: 'test.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true };
+
+  it('fetches the LAST changelog page, not the first', async () => {
+    const { JiraClient } = await import('../api/jira.js');
+    const calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      calls.push(url);
+      const body = url.includes('startAt=41')
+        ? { values: [{ author: { displayName: 'Tan Khay Ong' }, created: '2026-09-11T10:00:00Z' }] }
+        : { total: 42, values: [{ author: { displayName: 'Someone Old' }, created: '2020-01-01' }] };
+      return { ok: true, json: async () => body };
+    }));
+
+    const change = await new JiraClient(VALID).getLastChangeAuthor('TSM2-1');
+
+    // Jira pages the changelog oldest-first with no sort, so the newest entry
+    // is on the final page.
+    expect(calls[1]).toContain('startAt=41');
+    expect(change).toEqual({ author: 'Tan Khay Ong', created: '2026-09-11T10:00:00Z' });
+  });
+
+  it('makes only one call when there is a single entry', async () => {
+    const { JiraClient } = await import('../api/jira.js');
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ total: 1, values: [{ author: { displayName: 'Solo' }, created: '2026-01-01' }] })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const change = await new JiraClient(VALID).getLastChangeAuthor('TSM2-2');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(change.author).toBe('Solo');
+  });
+
+  it('returns null for an issue with no changelog', async () => {
+    const { JiraClient } = await import('../api/jira.js');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ total: 0, values: [] }) })));
+    expect(await new JiraClient(VALID).getLastChangeAuthor('TSM2-3')).toBeNull();
+  });
+
+  it('returns null instead of throwing when the request fails', async () => {
+    const { JiraClient } = await import('../api/jira.js');
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 404, statusText: 'Not Found', json: async () => ({})
+    })));
+    expect(await new JiraClient(VALID).getLastChangeAuthor('NOPE-1')).toBeNull();
+  });
+
+  it('url-encodes the issue key', async () => {
+    const { JiraClient } = await import('../api/jira.js');
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ total: 0, values: [] }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    await new JiraClient(VALID).getLastChangeAuthor('A B/C');
+    expect(fetchMock.mock.calls[0][0]).toContain('A%20B%2FC');
+  });
+});

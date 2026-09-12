@@ -6,7 +6,7 @@
 import logger from '../utils/logger.js';
 
 const DB_NAME = 'jira-planner-db';
-const DB_VERSION = 7;
+const DB_VERSION = 10;
 export const STORE_NAMES = {
   PROJECTS: 'projects',
   BOARDS: 'boards',
@@ -17,7 +17,9 @@ export const STORE_NAMES = {
   VIEWS: 'views',
   METADATA: 'metadata',
   CHANGELOG: 'changelog',
-  ISSUELINKS: 'issuelinks'
+  ISSUELINKS: 'issuelinks',
+  PRODUCT_CARDS: 'product_cards',
+  DOC_DRAFTS: 'doc_drafts'
 };
 
 let dbInstance = null;
@@ -74,6 +76,8 @@ export async function initDatabase() {
         issueStore.createIndex('assignee_id', 'assignee_id', { unique: false });
         issueStore.createIndex('reporter_id', 'reporter_id', { unique: false });
         issueStore.createIndex('qa_tester_id', 'qa_tester_id', { unique: false });
+        issueStore.createIndex('parent_key', 'parent_key', { unique: false });
+        issueStore.createIndex('project_key', 'project_key', { unique: false });
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.USERS)) {
         db.createObjectStore(STORE_NAMES.USERS, { keyPath: 'account_id' });
@@ -100,6 +104,52 @@ export async function initDatabase() {
         linkStore.createIndex('target_key', 'target_key', { unique: false });
         linkStore.createIndex('link_type', 'link_type', { unique: false });
       }
+
+      // Product Board: locally-owned cards mirroring a Jira product issue.
+      // keyPath 'id' + autoIncrement gives each card a stable local ID that is
+      // independent of the Jira key (a card can exist before it is linked).
+      if (!db.objectStoreNames.contains(STORE_NAMES.PRODUCT_CARDS)) {
+        const productStore = db.createObjectStore(STORE_NAMES.PRODUCT_CARDS, {
+          keyPath: 'id',
+          autoIncrement: true
+        });
+        productStore.createIndex('product_issue_key', 'product_issue_key', { unique: false });
+        productStore.createIndex('eng_issue_key', 'eng_issue_key', { unique: false });
+        productStore.createIndex('status', 'status', { unique: false });
+        productStore.createIndex('customer', 'customer', { unique: false });
+        productStore.createIndex('user_persona', 'user_persona', { unique: false });
+        productStore.createIndex('assigned_engineer_id', 'assigned_engineer_id', { unique: false });
+        productStore.createIndex('updated_at', 'updated_at', { unique: false });
+      }
+
+      // Documentation drafts — local Markdown, one-to-many against a product card.
+      if (!db.objectStoreNames.contains(STORE_NAMES.DOC_DRAFTS)) {
+        const draftStore = db.createObjectStore(STORE_NAMES.DOC_DRAFTS, {
+          keyPath: 'id',
+          autoIncrement: true
+        });
+        draftStore.createIndex('product_card_id', 'product_card_id', { unique: false });
+        draftStore.createIndex('last_saved', 'last_saved', { unique: false });
+      }
+
+      // --- Index migrations for stores that already exist -------------------
+      // createObjectStore only runs for brand-new stores, so an index added to
+      // an existing store has to be created from the versionchange transaction.
+      const tx = event.target.transaction;
+
+      const ensureIndex = (storeName, indexName, keyPath) => {
+        if (!db.objectStoreNames.contains(storeName)) return;
+        const store = tx.objectStore(storeName);
+        if (!store.indexNames.contains(indexName)) {
+          store.createIndex(indexName, keyPath, { unique: false });
+          logger.info(`[IndexedDB] Added index ${storeName}.${indexName}`);
+        }
+      };
+
+      // Epic/parent lookups: finding the Eng issue whose parent is a product issue.
+      ensureIndex(STORE_NAMES.ISSUES, 'parent_key', 'parent_key');
+      // Product Board selects its cards by project key (e.g. PDT).
+      ensureIndex(STORE_NAMES.ISSUES, 'project_key', 'project_key');
 
       logger.info('[IndexedDB] Database schema created/upgraded');
     };
@@ -237,6 +287,33 @@ export async function del(storeName, key) {
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(new Error(request.error?.message));
+  });
+}
+
+/**
+ * Delete every record whose index value matches.
+ * Returns the number of rows removed.
+ */
+export async function deleteByIndex(storeName, indexName, value) {
+  const db = getDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const index = store.index(indexName);
+    const request = index.openCursor(IDBKeyRange.only(value));
+
+    let deleted = 0;
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        cursor.delete();
+        deleted += 1;
+        cursor.continue();
+      }
+    };
+    request.onerror = () => reject(new Error(request.error?.message));
+    tx.oncomplete = () => resolve(deleted);
+    tx.onerror = () => reject(new Error(tx.error?.message));
   });
 }
 

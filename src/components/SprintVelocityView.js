@@ -1,6 +1,6 @@
 import { getSprintVelocity, getAllBoards, getSprintBurndown } from '../db/queries.js';
 import logger from '../utils/logger.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { formatDate } from '../utils/date.js';
 
 export class SprintVelocityView {
@@ -103,7 +103,7 @@ export class SprintVelocityView {
               const totalPct = Math.max(Math.round((sprint.total / maxTotal) * 100), 4);
               return `
                 <div class="bar-row ${this.animate ? 'bar-animate' : ''}">
-                  <div class="bar-label" title="${escapeHtml(sprint.name)}">
+                  <div class="bar-label" title="${escapeAttr(sprint.name)}">
                     <span class="bar-sprint-name">${escapeHtml(sprint.name)}</span>
                     <span class="bar-sprint-date">${formatDate(sprint.start_date)}</span>
                   </div>
@@ -154,7 +154,7 @@ export class SprintVelocityView {
                 ${sprint.assignees.length > 0 ? `
                   <div class="sprint-card-assignees">
                     ${sprint.assignees.map(a => `
-                      <div class="assignee-row" title="${escapeHtml(a.name)}: ${a.completed}/${a.total} done">
+                      <div class="assignee-row" title="${escapeAttr(a.name)}: ${a.completed}/${a.total} done">
                         <span class="assignee-name">${escapeHtml(a.name)}</span>
                         <span class="assignee-bar" style="--width: ${a.total > 0 ? Math.round(a.completed / a.total * 100) : 0}%"></span>
                         <span class="assignee-count">${a.completed}/${a.total}</span>
@@ -368,12 +368,12 @@ export const SprintVelocityViewStyles = `
 
   .velocity-header .back-btn {
     margin-bottom: 12px;
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .velocity-header h2 {
     margin: 0 0 16px 0;
-    font-size: 20px;
+    font-size: 23px;
     font-weight: 600;
   }
 
@@ -391,7 +391,7 @@ export const SprintVelocityViewStyles = `
     border-radius: 6px;
     background: var(--surface);
     color: var(--text);
-    font-size: 13px;
+    font-size: 15px;
     cursor: pointer;
   }
 
@@ -410,14 +410,14 @@ export const SprintVelocityViewStyles = `
   }
 
   .summary-value {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 700;
     color: var(--primary);
     line-height: 1.2;
   }
 
   .summary-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     margin-top: 4px;
     text-transform: uppercase;
@@ -431,7 +431,7 @@ export const SprintVelocityViewStyles = `
 
   .velocity-chart h3 {
     margin: 0 0 16px 0;
-    font-size: 16px;
+    font-size: 18.5px;
     font-weight: 600;
   }
 
@@ -464,7 +464,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .bar-sprint-name {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -472,7 +472,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .bar-sprint-date {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
   }
 
@@ -509,7 +509,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .bar-value {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text);
   }
@@ -521,7 +521,7 @@ export const SprintVelocityViewStyles = `
   .bar-pct {
     width: 48px;
     text-align: right;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     flex-shrink: 0;
   }
@@ -536,7 +536,7 @@ export const SprintVelocityViewStyles = `
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--border);
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
 
@@ -563,7 +563,7 @@ export const SprintVelocityViewStyles = `
 
   .velocity-sprints h3 {
     margin: 0 0 16px 0;
-    font-size: 16px;
+    font-size: 18.5px;
     font-weight: 600;
   }
 
@@ -590,13 +590,13 @@ export const SprintVelocityViewStyles = `
   }
 
   .sprint-card-name {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     margin-bottom: 2px;
   }
 
   .sprint-card-date {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
   }
 
@@ -611,13 +611,13 @@ export const SprintVelocityViewStyles = `
   }
 
   .stat-value {
-    font-size: 18px;
+    font-size: 20.5px;
     font-weight: 700;
     color: var(--primary);
   }
 
   .stat-label {
-    font-size: 10px;
+    font-size: 11.5px;
     color: var(--text-secondary);
     text-transform: uppercase;
   }
@@ -641,7 +641,7 @@ export const SprintVelocityViewStyles = `
   .assignee-name {
     width: 100px;
     min-width: 100px;
-    font-size: 12px;
+    font-size: 14px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -668,7 +668,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .assignee-count {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     min-width: 36px;
     text-align: right;
@@ -680,18 +680,18 @@ export const SprintVelocityViewStyles = `
   }
 
   .empty-icon {
-    font-size: 48px;
+    font-size: 52px;
     margin-bottom: 16px;
   }
 
   .empty-state h3 {
-    font-size: 18px;
+    font-size: 20.5px;
     margin-bottom: 8px;
   }
 
   .empty-state p {
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 16px;
   }
 
   /* Burndown Chart */
@@ -707,7 +707,7 @@ export const SprintVelocityViewStyles = `
     color: var(--text-secondary);
     padding: 4px 10px;
     border-radius: 4px;
-    font-size: 11px;
+    font-size: 12.5px;
     cursor: pointer;
     transition: all 0.2s;
   }
@@ -729,7 +729,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .burndown-title {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text);
   }
@@ -738,7 +738,7 @@ export const SprintVelocityViewStyles = `
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
 
@@ -749,7 +749,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .burndown-error {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     margin: 0 0 6px 0;
   }
@@ -762,7 +762,7 @@ export const SprintVelocityViewStyles = `
   }
 
   .burndown-tick {
-    font-size: 8px;
+    font-size: 9px;
     fill: var(--text-secondary);
   }
 
@@ -792,7 +792,7 @@ export const SprintVelocityViewStyles = `
     display: flex;
     gap: 16px;
     margin-top: 4px;
-    font-size: 10px;
+    font-size: 11.5px;
   }
 
   .burndown-legend-item {

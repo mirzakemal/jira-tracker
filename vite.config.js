@@ -20,6 +20,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      // Confluence Cloud shares the Atlassian site origin under /wiki.
+      '/wiki': {
+        target: `https://${jiraDomain}`,
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 });

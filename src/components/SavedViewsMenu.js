@@ -234,7 +234,7 @@ export const SavedViewsMenuStyles = `
   }
 
   .dropdown-arrow {
-    font-size: 10px;
+    font-size: 11.5px;
     transition: transform 0.2s ease;
   }
 
@@ -258,7 +258,7 @@ export const SavedViewsMenuStyles = `
   .saved-views-header {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -283,7 +283,7 @@ export const SavedViewsMenuStyles = `
   }
 
   .view-name {
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text);
   }
 
@@ -295,7 +295,7 @@ export const SavedViewsMenuStyles = `
     color: var(--text-secondary);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 18.5px;
     display: flex;
     align-items: center;
     justify-content: center;

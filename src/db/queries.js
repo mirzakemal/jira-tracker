@@ -1482,32 +1482,34 @@ export async function getIssueLinks(issueKey, options = {}) {
     await initDatabase();
     db = getDatabase();
   }
-  try {
-    const links = [];
-    const store = db.transaction([STORES.ISSUELINKS], 'readonly').objectStore(STORES.ISSUELINKS);
-    const sourceIdx = store.index('source_key');
-    const targetIdx = store.index('target_key');
 
-    const getCursor = (index, key) => new Promise((resolve) => {
-      const cursorReq = index.openCursor(IDBKeyRange.only(key));
-      cursorReq.onsuccess = () => {
-        const cursor = cursorReq.result;
-        if (cursor) {
-          links.push(cursor.value);
-          cursor.continue();
-        } else {
-          resolve();
-        }
-      };
-      cursorReq.onerror = () => resolve();
-    });
+  // NOTE: this function does NOT close the connection. getDatabase() returns
+  // the module-level singleton from indexeddb.js, which we did not open;
+  // closing it left indexeddb.js caching a dead handle, so every later read
+  // threw InvalidStateError until a page reload. indexeddb.js owns that
+  // lifecycle. (Prefer getByIndex for new code — see product-queries.js.)
+  const links = [];
+  const store = db.transaction([STORES.ISSUELINKS], 'readonly').objectStore(STORES.ISSUELINKS);
+  const sourceIdx = store.index('source_key');
+  const targetIdx = store.index('target_key');
 
-    await getCursor(sourceIdx, issueKey);
-    await getCursor(targetIdx, issueKey);
-    return links;
-  } finally {
-    if (!options.db) db.close();
-  }
+  const getCursor = (index, key) => new Promise((resolve) => {
+    const cursorReq = index.openCursor(IDBKeyRange.only(key));
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (cursor) {
+        links.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve();
+      }
+    };
+    cursorReq.onerror = () => resolve();
+  });
+
+  await getCursor(sourceIdx, issueKey);
+  await getCursor(targetIdx, issueKey);
+  return links;
 }
 
 /**
@@ -1574,11 +1576,8 @@ export async function getDependencyChain(issueKey, direction = 'outward', option
     };
   };
 
-  try {
-    return await buildTree(issueKey, 0);
-  } finally {
-    if (!options.db) db.close();
-  }
+  // No db.close() — see the note in getIssueLinks().
+  return buildTree(issueKey, 0);
 }
 
 /**

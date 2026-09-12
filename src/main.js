@@ -23,6 +23,8 @@ import { SavedViewsMenuStyles } from './components/SavedViewsMenu.js'
 import { TagsManagerStyles } from './components/TagsManager.js'
 import { CumulativeFlowView, CumulativeFlowViewStyles } from './components/CumulativeFlowView.js'
 import { StandupView, StandupViewStyles } from './components/StandupView.js'
+import { ProductBoardView, ProductBoardViewStyles } from './components/ProductBoardView.js'
+import { CustomerDashboardView, CustomerDashboardViewStyles } from './components/CustomerDashboardView.js'
 import { initKeyboardShortcuts, KeyboardShortcutsStyles } from './components/KeyboardShortcuts.js'
 import { sharedStyles } from './utils/styles.js'
 import { saveSelection, loadSelection, loadCredentials } from './utils/storage.js'
@@ -31,7 +33,10 @@ import { syncAll, syncIncremental, getSyncStatus } from './db/sync.js'
 import { invalidateFilterCache } from './db/queries.js'
 import { JiraClient } from './api/jira.js'
 import { navigate, onRouteChange, updateQueryParams, filtersToParams, paramsToFilters, ROUTES, parseRoute } from './utils/router.js'
+import { resolveInitialView, ROUTE_FOR_VIEW, productFiltersFromParams, customerFiltersFromParams } from './utils/initial-view.js'
 import { registerServiceWorker } from './utils/sw-register.js'
+import { shouldUseProxy } from './utils/proxy.js'
+import { usesServerAuth, configuredDomain, serverAuthProblem } from './utils/auth-mode.js'
 
 // App State
 const state = {
@@ -92,12 +97,24 @@ async function init() {
   window.filtersToParams = filtersToParams
   window.paramsToFilters = paramsToFilters
 
-  // Try to auto-connect if credentials exist
-  const saved = await loadCredentials()
-  if (saved?.domain && saved?.email && saved?.token) {
-    await autoConnect(saved)
+  // Under server auth the proxy holds the credential, so there is nothing to
+  // load and nothing to ask for — connect straight through.
+  if (usesServerAuth()) {
+    const problem = serverAuthProblem()
+    if (problem) {
+      logger.error('[Auth]', problem)
+      showError(problem)
+      renderDisconnected()
+    } else {
+      await autoConnect({ domain: configuredDomain(), serverAuth: true })
+    }
   } else {
-    renderDisconnected()
+    const saved = await loadCredentials()
+    if (saved?.domain && saved?.email && saved?.token) {
+      await autoConnect(saved)
+    } else {
+      renderDisconnected()
+    }
   }
 
   // Set up route listener to handle navigation after user is connected
@@ -370,6 +387,47 @@ function handleRouteChange({ route, params }) {
       const container = document.getElementById('issue-board-container')
       if (container) { container.innerHTML = standupView.render(); standupView.load().catch(err => logger.error('[Standup] load failed:', err)); }
     }
+  } else if (route === ROUTES.CUSTOMERS) {
+    if (state.currentView !== 'customers') {
+      state.currentView = 'customers'
+      updateViewToggle()
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) boardSelectorContainer.style.display = 'none'
+      cleanupCurrentView()
+      const customerView = new CustomerDashboardView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = customerView
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = customerView.render()
+        customerView.load(customerFiltersFromParams(params))
+          .catch(err => logger.error('[CustomerDashboard] load failed:', err))
+      }
+    } else if (state.currentViewInstance && !state.currentViewInstance.isLoading) {
+      state.currentViewInstance.load?.(customerFiltersFromParams(params))
+        ?.catch(err => logger.error('[CustomerDashboard] filter reload failed:', err))
+    }
+  } else if (route === ROUTES.PRODUCT) {
+    if (state.currentView !== 'product') {
+      state.currentView = 'product'
+      updateViewToggle()
+      const boardSelectorContainer = document.getElementById('board-selector-container')
+      if (boardSelectorContainer) boardSelectorContainer.style.display = 'none'
+      cleanupCurrentView()
+      const productView = new ProductBoardView(state.client, state.jiraDomain, switchToBoardView)
+      state.currentViewInstance = productView
+      const container = document.getElementById('issue-board-container')
+      if (container) {
+        container.innerHTML = productView.render()
+        productView.load(productFiltersFromParams(params)).catch(err => logger.error('[ProductBoard] load failed:', err))
+      }
+    } else if (state.currentViewInstance && !state.currentViewInstance.isLoading) {
+      // Already on the view — reapply filters from the URL. Skipped while a
+      // load is in flight: renderConnected() writes the landing route into the
+      // hash, and the resulting hashchange would otherwise restart the load it
+      // just kicked off and flash the spinner.
+      state.currentViewInstance.load?.(productFiltersFromParams(params))
+        ?.catch(err => logger.error('[ProductBoard] filter reload failed:', err))
+    }
   }
 }
 
@@ -390,12 +448,12 @@ function cleanupCurrentView() {
  */
 async function autoConnect(saved) {
   try {
-    const isDevelopment = window.location.hostname === 'localhost'
     const client = new JiraClient({
       domain: saved.domain,
       email: saved.email,
       apiToken: saved.token,
-      useProxy: isDevelopment
+      useProxy: shouldUseProxy(),
+      serverAuth: Boolean(saved.serverAuth)
     })
 
     const user = await client.testConnection()
@@ -407,10 +465,7 @@ async function autoConnect(saved) {
 
     // Check current route BEFORE rendering to determine initial view
     const { route, params } = parseRoute()
-    const hasFilterParams = params.customer || params.fixVersion || params.status || params.product || params.tag || params.projectKey
-    const initialView = (route === ROUTES.ROADMAP || params.roadmap === 'true') ? 'roadmap'
-      : (route === ROUTES.ALL_ISSUES || params.allIssues === 'true' || hasFilterParams) ? 'all-issues'
-      : 'board'
+    const initialView = resolveInitialView(route, params)
     const filters = paramsToFilters(params)
 
     logger.info('[AutoConnect] Initial view will be:', initialView, 'route:', route, 'params:', params)
@@ -418,6 +473,12 @@ async function autoConnect(saved) {
     await renderConnected(user, initialView, filters)
   } catch (error) {
     logger.error('[AutoConnect] Failed to auto-connect:', error.message)
+    if (saved.serverAuth) {
+      // There is no form to fall back to — the credential is the proxy's.
+      showError(`Could not reach Jira through the proxy: ${error.message}`)
+      renderDisconnected()
+      return
+    }
     // Fall back to login screen with saved credentials pre-filled
     renderDisconnected({
       displayName: 'User',
@@ -451,8 +512,16 @@ async function renderDisconnected(savedUser = null) {
 /**
  * Render connected state (full app)
  */
-async function renderConnected(user, initialView = 'board', filters = {}) {
+async function renderConnected(user, initialView = 'product', filters = {}) {
   state.currentView = initialView
+
+  // Put the landing view in the URL. Without this the hash keeps whatever it
+  // was (often #board from a previous session) while a different view renders,
+  // so a reload lands somewhere else than the screen showed.
+  const initialRoute = ROUTE_FOR_VIEW[initialView]
+  if (initialRoute && parseRoute().route !== initialRoute) {
+    navigate(initialRoute, filtersToParams(filters))
+  }
 
   // Single unified layout: sidebar + main content
   appElement.innerHTML = `
@@ -465,6 +534,14 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
         <div class="sidebar-nav" id="sidebar-nav">
           <div class="nav-section">
             <div class="nav-section-title">Views</div>
+            <button class="nav-item" data-view="product" id="nav-product">
+              <span class="nav-item-icon">🧭</span>
+              <span class="nav-item-label">Product</span>
+            </button>
+            <button class="nav-item" data-view="customers" id="nav-customers">
+              <span class="nav-item-icon">🏢</span>
+              <span class="nav-item-label">Customer Cards</span>
+            </button>
             <button class="nav-item" data-view="board" id="nav-board">
               <span class="nav-item-icon">📋</span>
               <span class="nav-item-label">Board</span>
@@ -546,10 +623,18 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
   // Set the active nav item
   highlightNavItem(initialView)
 
-  // Bind sidebar collapse button
-  let collapsed = false
-  document.getElementById('sidebar-collapse-btn')?.addEventListener('click', () => {
-    collapsed = !collapsed
+  // Sidebar collapse — collapsed by default, and the choice is remembered.
+  // Stored as an explicit 'false' rather than removing the key, so "expanded"
+  // is distinguishable from "never set" (which must still default to collapsed).
+  const SIDEBAR_KEY = 'jira-planner-sidebar-collapsed'
+  let collapsed = true
+  try {
+    collapsed = localStorage.getItem(SIDEBAR_KEY) !== 'false'
+  } catch {
+    // Private browsing / storage disabled — keep the default.
+  }
+
+  const applySidebarCollapsed = () => {
     const sidebar = document.getElementById('app-sidebar')
     const btn = document.getElementById('sidebar-collapse-btn')
     sidebar?.classList.toggle('collapsed', collapsed)
@@ -557,7 +642,20 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
       btn.innerHTML = collapsed
         ? '<span>▶</span>'
         : '<span>◀</span><span class="nav-item-label">Collapse</span>'
+      btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar'
     }
+  }
+
+  applySidebarCollapsed()
+
+  document.getElementById('sidebar-collapse-btn')?.addEventListener('click', () => {
+    collapsed = !collapsed
+    try {
+      localStorage.setItem(SIDEBAR_KEY, String(collapsed))
+    } catch {
+      // Not persisting is fine; the toggle still works for this session.
+    }
+    applySidebarCollapsed()
   })
 
   // Bind theme toggle
@@ -586,7 +684,9 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
       releases: () => switchToReleasesView(),
       dashboard: () => switchToDashboardView(),
       cfd: () => navigate(ROUTES.CFD),
-      standup: () => navigate(ROUTES.STANDUP)
+      standup: () => navigate(ROUTES.STANDUP),
+      product: () => switchToProductBoardView(),
+      customers: () => switchToCustomerDashboardView()
     }
     const handler = viewSwitchMap[view]
     if (handler) handler()
@@ -629,9 +729,24 @@ async function renderConnected(user, initialView = 'board', filters = {}) {
       loadIssues().catch(err => logger.error('[Board] loadIssues failed:', err))
     }
     autoSync()
+    startAutoSyncTimer()
   }).catch(err => logger.error('[BoardSelector] load failed:', err))
 
   // Render initial view content
+  if (initialView === 'product') {
+    const productView = new ProductBoardView(state.client, state.jiraDomain, switchToBoardView)
+    state.currentViewInstance = productView
+    const container = document.getElementById('issue-board-container')
+    if (container) {
+      container.innerHTML = productView.render()
+      // Read the params here rather than expecting a caller to pass them —
+      // renderConnected only receives `filters`, which uses the issue-filter
+      // vocabulary, not the Product Board's.
+      productView.load(productFiltersFromParams(parseRoute().params))
+        .catch(err => logger.error('[ProductBoard] initial load failed:', err))
+    }
+  }
+
   if (initialView === 'all-issues') {
     const allIssuesView = new AllIssuesView(state.client, state.jiraDomain, switchToBoardView)
     const container = document.getElementById('issue-board-container')
@@ -692,6 +807,15 @@ async function handleSelectionChange(selection) {
     navigate(ROUTES.ALL_ISSUES, { allIssues: 'true' })
 
     switchToAllIssuesView(state.filters)
+    return
+  }
+
+  // Only take over the screen when the board is actually the current view.
+  // BoardSelector.load() fires this callback while auto-selecting a project on
+  // startup; without this guard that auto-selection drags any other landing
+  // view (Product, Roadmap, ...) back to #board and reveals the selector.
+  const boardIsCurrentView = state.currentView === 'board' || state.currentView === 'all-issues'
+  if (!boardIsCurrentView) {
     return
   }
 
@@ -854,6 +978,8 @@ function addGlobalStyles() {
     ${DependencyGraphViewStyles || ''}
     ${CumulativeFlowViewStyles || ''}
     ${StandupViewStyles || ''}
+    ${ProductBoardViewStyles || ''}
+    ${CustomerDashboardViewStyles || ''}
     ${KeyboardShortcutsStyles || ''}
 
     /* Offline indicator */
@@ -960,8 +1086,53 @@ async function renderSyncStatus() {
   }
 }
 
+/** How often to refresh in the background. */
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000
+let autoSyncTimer = null
+
+/**
+ * Refresh in the background on a timer, so the board reflects Jira without
+ * anyone pressing Sync.
+ *
+ * Deliberately conservative about when it fires:
+ *  - nothing while the tab is hidden (a background tab polling Jira all day is
+ *    wasted requests and rate-limit budget); a catch-up sync runs on refocus
+ *  - nothing while offline
+ *  - nothing while a sync is already running
+ */
+function startAutoSyncTimer() {
+  stopAutoSyncTimer()
+
+  autoSyncTimer = setInterval(() => {
+    if (document.hidden || !navigator.onLine) return
+    autoSync().catch(err => logger.error('[AutoSync] scheduled sync failed:', err))
+  }, AUTO_SYNC_INTERVAL_MS)
+
+  // Catch up when the tab comes back, rather than waiting out the interval.
+  document.addEventListener('visibilitychange', handleVisibilityResync)
+  window.addEventListener('online', handleVisibilityResync)
+}
+
+function stopAutoSyncTimer() {
+  if (autoSyncTimer) clearInterval(autoSyncTimer)
+  autoSyncTimer = null
+  document.removeEventListener('visibilitychange', handleVisibilityResync)
+  window.removeEventListener('online', handleVisibilityResync)
+}
+
+async function handleVisibilityResync() {
+  if (document.hidden || !navigator.onLine || state.isSyncing) return
+
+  const status = await getSyncStatus().catch(() => null)
+  const last = status?.lastSync ? new Date(status.lastSync).getTime() : 0
+  if (Date.now() - last < AUTO_SYNC_INTERVAL_MS) return
+
+  autoSync().catch(err => logger.error('[AutoSync] refocus sync failed:', err))
+}
+
 async function autoSync() {
   if (!state.client || state.isSyncing) return
+  state.isSyncing = true
 
   try {
     if (!state.dbInitialized) {
@@ -979,8 +1150,17 @@ async function autoSync() {
     }
 
     logger.info('[AutoSync] Background sync completed')
+
+    // Refresh whatever view is on screen, so new data appears without the user
+    // switching away and back.
+    if (typeof state.currentViewInstance?.load === 'function') {
+      state.currentViewInstance.load(state.currentViewInstance.filters || {})
+        .catch(err => logger.error('[AutoSync] view refresh failed:', err))
+    }
   } catch (error) {
     logger.error('[AutoSync] Background sync failed:', error.message)
+  } finally {
+    state.isSyncing = false
   }
 }
 
@@ -1238,6 +1418,78 @@ async function switchToWorkloadView(filters = {}) {
   state.currentViewInstance = workloadView
   container.innerHTML = workloadView.render()
   await workloadView.load(filters.boardId, filters.sprintId)
+}
+
+/**
+ * Switch to the Product Board view
+ */
+async function switchToProductBoardView(filters = {}) {
+  cleanupCurrentView()
+  state.currentView = 'product'
+  updateViewToggle()
+
+  navigate(ROUTES.PRODUCT)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (!container) return
+
+  const productView = new ProductBoardView(state.client, state.jiraDomain, switchToBoardView)
+  state.currentViewInstance = productView
+  container.innerHTML = productView.render()
+  await productView.load(filters)
+}
+
+/**
+ * Switch to the Customer Dashboard view
+ */
+async function switchToCustomerDashboardView(filters = {}) {
+  cleanupCurrentView()
+  state.currentView = 'customers'
+  updateViewToggle()
+
+  navigate(ROUTES.CUSTOMERS)
+
+  const boardSelectorContainer = document.getElementById('board-selector-container')
+  if (boardSelectorContainer) {
+    boardSelectorContainer.style.display = 'none'
+  }
+
+  if (!state.dbInitialized) {
+    try {
+      await initDatabase()
+      state.dbInitialized = true
+    } catch (error) {
+      logger.error('[DB] Failed to initialize:', error)
+      showError(`Failed to initialize database: ${error.message}. Please try again.`)
+      switchToBoardView()
+      return
+    }
+  }
+
+  const container = document.getElementById('issue-board-container')
+  if (!container) return
+
+  const customerView = new CustomerDashboardView(state.client, state.jiraDomain, switchToBoardView)
+  state.currentViewInstance = customerView
+  container.innerHTML = customerView.render()
+  await customerView.load(filters)
 }
 
 /**

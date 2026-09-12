@@ -11,6 +11,16 @@ let updateCallback = null;
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
+  // Don't register in development. A service worker caching the app shell
+  // fights Vite's HMR and serves stale modules, which looks like edits simply
+  // not taking effect. Any worker left over from a previous run is removed.
+  if (import.meta.env?.DEV) {
+    navigator.serviceWorker.getRegistrations?.()
+      .then(regs => regs.forEach(r => r.unregister()))
+      .catch(() => {});
+    return;
+  }
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((registration) => {
       if (registration.waiting) {

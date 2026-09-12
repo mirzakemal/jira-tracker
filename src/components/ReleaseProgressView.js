@@ -1,6 +1,6 @@
 import { getReleaseProgress, getAllProjects } from '../db/queries.js';
 import { openIssueDrawer } from './IssueDetailDrawer.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { formatDate } from '../utils/date.js';
 import logger from '../utils/logger.js';
 
@@ -56,7 +56,7 @@ export class ReleaseProgressView {
     }
 
     const projectsHtml = this.projects.map(p =>
-      `<option value="${escapeHtml(p.key)}"${p.key === this.projectKey ? ' selected' : ''}>${escapeHtml(p.name)}</option>`
+      `<option value="${escapeAttr(p.key)}"${p.key === this.projectKey ? ' selected' : ''}>${escapeHtml(p.name)}</option>`
     ).join('');
 
     const maxTotal = Math.max(...this.releases.map(r => r.total), 1);
@@ -119,7 +119,7 @@ export class ReleaseProgressView {
     const slug = release.name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '');
 
     return `
-      <div class="release-card ${riskClass}" data-release="${escapeHtml(release.name)}">
+      <div class="release-card ${riskClass}" data-release="${escapeAttr(release.name)}">
         <div class="release-card-header">
           <h3 class="release-name">${escapeHtml(release.name)}</h3>
           <span class="release-risk-badge ${riskClass}">${riskLabel}</span>
@@ -161,8 +161,8 @@ export class ReleaseProgressView {
                              (issue.status_category || '').toLowerCase().includes('resolved');
               return `
                 <div class="release-issue-row ${isDone ? 'issue-completed' : ''}"
-                     data-issue-key="${escapeHtml(issue.key)}"
-                     title="${escapeHtml(issue.summary || issue.key)}">
+                     data-issue-key="${escapeAttr(issue.key)}"
+                     title="${escapeAttr(issue.summary || issue.key)}">
                   <span class="issue-key-badge">${escapeHtml(issue.key)}</span>
                   <span class="issue-status-tag ${isDone ? 'status-done' : 'status-active'}">${escapeHtml(issue.status || '')}</span>
                   <span class="issue-summary-text">${escapeHtml(issue.summary || '')}</span>
@@ -179,7 +179,7 @@ export class ReleaseProgressView {
 
   renderEmpty() {
     const projectsHtml = this.projects.map(p =>
-      `<option value="${escapeHtml(p.key)}"${p.key === this.projectKey ? ' selected' : ''}>${escapeHtml(p.name)}</option>`
+      `<option value="${escapeAttr(p.key)}"${p.key === this.projectKey ? ' selected' : ''}>${escapeHtml(p.name)}</option>`
     ).join('');
     return `
       <div class="releases-view" id="releases-view">
@@ -287,11 +287,11 @@ export const ReleaseProgressViewStyles = `
   }
   .release-name {
     margin: 0;
-    font-size: 16px;
+    font-size: 18.5px;
     font-weight: 600;
   }
   .release-risk-badge {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     padding: 3px 10px;
     border-radius: 12px;
@@ -335,7 +335,7 @@ export const ReleaseProgressViewStyles = `
   .progress-fill.bar-amber { background: #f0a020; }
   .progress-fill.bar-red { background: #dc3545; }
   .progress-text {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     min-width: 38px;
     text-align: right;
@@ -352,11 +352,11 @@ export const ReleaseProgressViewStyles = `
     gap: 2px;
   }
   .stat-value {
-    font-size: 18px;
+    font-size: 20.5px;
     font-weight: 700;
   }
   .stat-label {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary, #6c757d);
   }
   .stat-done .stat-value { color: #28a745; }
@@ -385,7 +385,7 @@ export const ReleaseProgressViewStyles = `
   }
   .issue-key-badge {
     font-family: monospace;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     background: var(--bg, #e9ecef);
     padding: 1px 6px;
@@ -393,7 +393,7 @@ export const ReleaseProgressViewStyles = `
     white-space: nowrap;
   }
   .issue-status-tag {
-    font-size: 10px;
+    font-size: 11.5px;
     padding: 1px 6px;
     border-radius: 3px;
     font-weight: 500;
@@ -408,21 +408,21 @@ export const ReleaseProgressViewStyles = `
     color: #004085;
   }
   .issue-summary-text {
-    font-size: 13px;
+    font-size: 15px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .release-issue-count {
     padding-top: 8px;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary, #6c757d);
   }
   .project-filter {
     padding: 6px 10px;
     border: 1px solid var(--border, #333);
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 15px;
     background: var(--bg, white);
     color: var(--text, #333);
   }

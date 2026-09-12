@@ -302,3 +302,47 @@ describe('queries - roadmap', () => {
     expect(doneIssues.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('Link queries leave the shared connection open', () => {
+  let db, queries;
+
+  beforeEach(async () => {
+    db = await import('../db/indexeddb.js');
+    queries = await import('../db/queries.js');
+    await db.initDatabase();
+    for (const s of ['issues', 'issuelinks']) {
+      try { await db.clear(s); } catch { /* ignore */ }
+    }
+  });
+
+  it('getIssueLinks does not close the singleton it did not open', async () => {
+    await db.put('issuelinks', { source_key: 'PDT-1', target_key: 'TSM2-1', link_type: 'Relates' });
+
+    const links = await queries.getIssueLinks('PDT-1');
+    expect(links).toHaveLength(1);
+
+    // Closing the shared handle used to leave indexeddb.js caching a dead
+    // connection, so every later read threw InvalidStateError.
+    await expect(db.getAll('issuelinks')).resolves.toHaveLength(1);
+    await expect(queries.getIssueLinks('PDT-1')).resolves.toHaveLength(1);
+  });
+
+  it('getDependencyChain leaves the database usable too', async () => {
+    await db.put('issues', { key: 'PDT-2', summary: 'Root' });
+    await db.put('issuelinks', {
+      source_key: 'PDT-2', target_key: 'TSM2-2', link_type: 'blocks', direction: 'outward'
+    });
+
+    await queries.getDependencyChain('PDT-2', 'outward', { maxDepth: 2 });
+
+    await expect(db.getAll('issues')).resolves.toHaveLength(1);
+  });
+
+  it('the source file carries no live db.close() call', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(process.cwd(), 'src/db/queries.js'), 'utf8');
+    const calls = src.split('\n').filter(l => /db\.close\(\)/.test(l) && !l.trim().startsWith('//'));
+    expect(calls).toEqual([]);
+  });
+});

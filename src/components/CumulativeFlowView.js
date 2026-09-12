@@ -142,13 +142,13 @@ export const CumulativeFlowViewStyles = `
   .cfd-done { background: var(--success); }
   .cfd-inprogress { background: var(--primary); }
   .cfd-todo { background: var(--text-muted); opacity: 0.5; }
-  .cfd-label { font-size: 10px; color: var(--text-muted); margin-top: 6px; white-space: nowrap; }
+  .cfd-label { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; white-space: nowrap; }
   .cfd-legend {
     display: flex;
     gap: 16px;
     justify-content: center;
     margin-top: 12px;
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text-muted);
   }
   .cfd-dot {

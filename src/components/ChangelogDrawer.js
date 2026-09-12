@@ -3,7 +3,7 @@
  * Slide-in drawer showing what changed in the most recent sync
  */
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { openIssueDrawer } from './IssueDetailDrawer.js';
 
 export class ChangelogDrawer {
@@ -56,8 +56,8 @@ export class ChangelogDrawer {
       }).join('');
 
       return `
-        <div class="changelog-issue-card" data-issue-key="${escapeHtml(entry.issue_key)}">
-          <button class="changelog-issue-link" data-issue-key="${escapeHtml(entry.issue_key)}">
+        <div class="changelog-issue-card" data-issue-key="${escapeAttr(entry.issue_key)}">
+          <button class="changelog-issue-link" data-issue-key="${escapeAttr(entry.issue_key)}">
             <span class="changelog-issue-key">${escapeHtml(entry.issue_key)}</span>
             <span class="changelog-issue-summary">${escapeHtml(entry.issue_summary)}</span>
           </button>
@@ -172,12 +172,12 @@ export const ChangelogDrawerStyles = `
   }
   .changelog-drawer-header h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 20.5px;
     color: var(--text, #e0e0e0);
     flex: 1;
   }
   .changelog-count {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--primary, #6366f1);
     background: color-mix(in srgb, var(--primary, #6366f1) 15%, transparent);
     padding: 3px 10px;
@@ -186,7 +186,7 @@ export const ChangelogDrawerStyles = `
   .changelog-close-btn {
     background: none;
     border: none;
-    font-size: 24px;
+    font-size: 27.5px;
     color: var(--text-secondary, #888);
     cursor: pointer;
     padding: 0 4px;
@@ -207,10 +207,10 @@ export const ChangelogDrawerStyles = `
   }
   .changelog-empty p {
     margin: 4px 0;
-    font-size: 14px;
+    font-size: 16px;
   }
   .changelog-sub {
-    font-size: 12px !important;
+    font-size: 14px !important;
     opacity: 0.6;
   }
   .changelog-issue-card {
@@ -234,13 +234,13 @@ export const ChangelogDrawerStyles = `
   .changelog-issue-key {
     font-weight: 600;
     color: var(--primary, #6366f1);
-    font-size: 13px;
+    font-size: 15px;
     display: inline-block;
     margin-right: 8px;
   }
   .changelog-issue-summary {
     color: var(--text, #e0e0e0);
-    font-size: 13px;
+    font-size: 15px;
   }
   .changelog-issue-changes {
     margin-top: 10px;
@@ -252,7 +252,7 @@ export const ChangelogDrawerStyles = `
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .changelog-field-name {
     color: var(--text-secondary, #888);
