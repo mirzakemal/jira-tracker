@@ -8,12 +8,24 @@ import {
   initDatabase,
   putBulk,
   getAll,
+  getMany,
+  getByIndex,
+  count,
   setMetadata,
   getMetadata,
   clear,
   deleteByIndex,
   STORE_NAMES as STORES
 } from './indexeddb.js';
+import {
+  beginRun,
+  isDone,
+  markDone,
+  setCursor,
+  resumeOffset,
+  clearProgress,
+  pendingRun
+} from './sync-progress.js';
 
 import { CUSTOM_FIELDS } from '../jira-config.js';
 import { resolveCustomFieldIds, defaultCustomFieldIds } from './field-resolver.js';
@@ -24,18 +36,30 @@ import { syncProductBoard } from './product-sync.js';
  * Sync all data from Jira
  */
 export async function syncAll(client) {
-  logger.info('[Sync] Starting full sync...');
   const warnings = [];
 
   try {
     await initDatabase();
-    await clear(STORES.CHANGELOG);
-    await clear(STORES.ISSUELINKS);
+
+    // Resumes an interrupted run when there is a recent checkpoint, otherwise
+    // starts fresh. See sync-progress.js for why this exists.
+    const run = await beginRun('full');
+    logger.info(`[Sync] ${run.resumed ? 'Resuming' : 'Starting'} full sync...`);
+
+    if (!run.resumed) {
+      // Derived data, safe to rebuild — but only on a fresh run. Wiping it at
+      // the start of a resume would discard changes the interrupted attempt
+      // already recorded.
+      await clear(STORES.CHANGELOG);
+      // NOTE: issuelinks is deliberately NOT cleared. upsertIssues() replaces
+      // links per issue, so a full sync still ends with an accurate store —
+      // and an interrupted run no longer leaves every issue link-less.
+    }
 
     await loadFieldIds(client);
     await syncProjects(client);
     await syncAllBoards(client);
-    await syncAllSprints(client, warnings);
+    await syncAllSprints(client, warnings, run);
 
     // syncAllBoards() walks every accessible board, so both the Product and
     // Engineering boards are already cached by this point. Refresh the product
@@ -45,13 +69,16 @@ export async function syncAll(client) {
 
     await setMetadata('last_full_sync', new Date().toISOString());
     await setMetadata('last_sync', new Date().toISOString());
+    await clearProgress();
 
     const changeCount = await countChangelogEntries();
 
     logger.info(`[Sync] Full sync completed with ${changeCount} changes`);
     return { success: true, timestamp: new Date(), changeCount, warnings, productBoard };
   } catch (error) {
-    logger.error('[Sync] Full sync failed:', error);
+    // The checkpoint is left in place on purpose: it is what lets the next
+    // attempt pick up from here instead of starting over.
+    logger.error('[Sync] Full sync failed (progress checkpointed):', error);
     throw error;
   }
 }
@@ -60,36 +87,50 @@ export async function syncAll(client) {
  * Incremental sync
  */
 export async function syncIncremental(client) {
-  logger.info('[Sync] Starting incremental sync...');
   const warnings = [];
 
   try {
     await initDatabase();
-    await clear(STORES.CHANGELOG);
+
+    const lastSync = await getMetadata('last_sync');
+    // An interrupted incremental run keeps its ORIGINAL window. Recomputing it
+    // from `last_sync` on resume would be the same value here, but making the
+    // window part of the checkpoint keeps it correct if last_sync ever moves
+    // for another reason.
+    const run = await beginRun('incremental', { sinceTimestamp: lastSync });
+    logger.info(`[Sync] ${run.resumed ? 'Resuming' : 'Starting'} incremental sync...`);
+
+    if (!run.resumed) {
+      await clear(STORES.CHANGELOG);
+    }
     // NOTE: issuelinks is deliberately NOT cleared here. An incremental sync
     // only refetches issues updated since the last run, so wiping the whole
     // store would strip the links off every issue that happened not to change
     // — and they would never come back without a full sync. upsertIssues()
     // replaces links per issue instead.
 
-    const lastSync = await getMetadata('last_sync');
-
     await loadFieldIds(client);
     await syncProjects(client);
     await syncAllBoards(client);
-    await syncUpdatedIssues(client, lastSync, warnings);
+    await syncUpdatedIssues(client, run.sinceTimestamp, warnings, run);
 
     await syncProductIssueLinks(client, warnings);
-    const productBoard = await reconcileProductBoard(warnings);;
+    const productBoard = await reconcileProductBoard(warnings);
 
+    // Only advances once the whole run succeeded. Moving it earlier would let
+    // a failed run narrow the next window and permanently skip issues.
     await setMetadata('last_sync', new Date().toISOString());
+    // Scoped to this mode on purpose. An incremental run only fetches recently
+    // updated issues, so it cannot stand in for an interrupted full sync —
+    // clearing that checkpoint here would strand the gaps it left behind.
+    await clearProgress('incremental');
 
     const changeCount = await countChangelogEntries();
 
     logger.info(`[Sync] Incremental sync completed with ${changeCount} changes`);
     return { success: true, timestamp: new Date(), changeCount, warnings, productBoard };
   } catch (error) {
-    logger.error('[Sync] Incremental sync failed:', error);
+    logger.error('[Sync] Incremental sync failed (progress checkpointed):', error);
     throw error;
   }
 }
@@ -154,15 +195,17 @@ function linkTargetSnapshot(other) {
  * @returns {Promise<number>} issues whose links were refreshed
  */
 async function syncProductIssueLinks(client, warnings) {
-  let issues = [];
+  let productIssues = [];
   try {
-    issues = await getAll(STORES.ISSUES);
+    // Via the project_key index, so this reads only the Product project's
+    // issues rather than materialising every cached issue (and its raw_data)
+    // to throw almost all of them away.
+    productIssues = await getByIndex(STORES.ISSUES, 'project_key', PRODUCT_PROJECT_KEY);
   } catch (error) {
     warnings.push(`Could not read cached issues for link refresh: ${error.message}`);
     return 0;
   }
 
-  const productIssues = issues.filter(i => i.project_key === PRODUCT_PROJECT_KEY);
   if (productIssues.length === 0) return 0;
 
   let refreshed = 0;
@@ -230,7 +273,15 @@ async function reconcileProductBoard(warnings) {
  */
 async function syncProjects(client) {
   const projectsData = await client.getProjects();
-  const projects = projectsData.values || projectsData || [];
+  // getProjects() returns a fully-paginated array. The older shape was the raw
+  // {values: [...]} envelope, still accepted here.
+  //
+  // Note the Array.isArray check comes first on purpose: `[].values` is
+  // Array.prototype.values, a function — so the obvious
+  // `projectsData.values || projectsData` picks the method, not the array.
+  const projects = Array.isArray(projectsData)
+    ? projectsData
+    : (projectsData?.values || []);
 
   const projectsToUpdate = projects.map(project => ({
     id: project.id,
@@ -266,18 +317,18 @@ async function syncAllBoards(client) {
 /**
  * Sync all sprints from all boards
  */
-async function syncAllSprints(client, warnings) {
+async function syncAllSprints(client, warnings, run) {
   const boards = await getAll(STORES.BOARDS);
 
   for (const board of boards) {
-    await syncSprintsForBoard(client, board.id, warnings);
+    await syncSprintsForBoard(client, board.id, warnings, run);
   }
 }
 
 /**
  * Sync sprints for a specific board
  */
-async function syncSprintsForBoard(client, boardId, warnings) {
+async function syncSprintsForBoard(client, boardId, warnings, run) {
   const allSprints = [];
 
   try {
@@ -319,20 +370,27 @@ async function syncSprintsForBoard(client, boardId, warnings) {
   // If board has sprints, sync issues for each sprint
   if (allSprints.length > 0) {
     for (const sprint of allSprints) {
-      await syncSprintIssues(client, boardId, sprint.id, warnings);
+      await syncSprintIssues(client, boardId, sprint.id, warnings, run);
     }
   } else {
     // Board doesn't have sprints - sync all issues directly from the board
-    await syncBoardIssues(client, boardId, warnings);
+    await syncBoardIssues(client, boardId, warnings, run);
   }
 }
 
 /**
  * Sync all issues from a board (for boards without sprints)
  */
-async function syncBoardIssues(client, boardId, warnings) {
+async function syncBoardIssues(client, boardId, warnings, run) {
+  const unit = `board:${boardId}`;
+  if (run && isDone(run, unit)) {
+    logger.debug(`[Sync] Skipping ${unit} (already synced this run)`);
+    return;
+  }
+
   try {
-    let startAt = 0;
+    // Picks up mid-board if a previous attempt stopped part way through.
+    let startAt = run ? resumeOffset(run, unit) : 0;
     const maxResults = 100;
     let totalIssues = 0;
     let hasMore = true;
@@ -348,8 +406,10 @@ async function syncBoardIssues(client, boardId, warnings) {
 
       hasMore = issues.length === maxResults;
       startAt += maxResults;
+      if (hasMore && run) await setCursor(run, unit, startAt);
     }
 
+    if (run) await markDone(run, unit);
     logger.debug(`[Sync] Synced ${totalIssues} issues for board ${boardId} (no sprints)`);
   } catch (error) {
     logger.error(`[Sync] Failed to sync issues for board ${boardId} (no sprints):`, error);
@@ -360,10 +420,18 @@ async function syncBoardIssues(client, boardId, warnings) {
 /**
  * Sync issues for a specific sprint
  */
-async function syncSprintIssues(client, boardId, sprintId, warnings) {
+async function syncSprintIssues(client, boardId, sprintId, warnings, run) {
+  // Keyed by board too: the same sprint can be visible from more than one
+  // board, and each pairing writes a different board_id onto the issues.
+  const unit = `sprint:${boardId}:${sprintId}`;
+  if (run && isDone(run, unit)) {
+    logger.debug(`[Sync] Skipping ${unit} (already synced this run)`);
+    return;
+  }
+
   try {
     const jql = `sprint = ${sprintId}`;
-    let startAt = 0;
+    let startAt = run ? resumeOffset(run, unit) : 0;
     const maxResults = 100;
     let totalIssues = 0;
     let hasMore = true;
@@ -379,8 +447,10 @@ async function syncSprintIssues(client, boardId, sprintId, warnings) {
 
       hasMore = issues.length === maxResults;
       startAt += maxResults;
+      if (hasMore && run) await setCursor(run, unit, startAt);
     }
 
+    if (run) await markDone(run, unit);
     logger.debug(`[Sync] Synced ${totalIssues} issues for sprint ${sprintId}`);
   } catch (error) {
     logger.error(`[Sync] Failed to sync issues for sprint ${sprintId}:`, error);
@@ -391,10 +461,16 @@ async function syncSprintIssues(client, boardId, sprintId, warnings) {
 /**
  * Sync updated issues since a given timestamp
  */
-async function syncUpdatedIssues(client, sinceTimestamp, warnings) {
+async function syncUpdatedIssues(client, sinceTimestamp, warnings, run) {
   const boards = await getAll(STORES.BOARDS);
 
   for (const board of boards) {
+    const unit = `updated:${board.id}`;
+    if (run && isDone(run, unit)) {
+      logger.debug(`[Sync] Skipping ${unit} (already synced this run)`);
+      continue;
+    }
+
     try {
       let jql = `updated >= -30d`;
       if (sinceTimestamp) {
@@ -409,7 +485,7 @@ async function syncUpdatedIssues(client, sinceTimestamp, warnings) {
         jql = `updated >= "${jiraDate}"`;
       }
 
-      let startAt = 0;
+      let startAt = run ? resumeOffset(run, unit) : 0;
       const maxResults = 100;
       let totalIssues = 0;
       let hasMore = true;
@@ -425,8 +501,10 @@ async function syncUpdatedIssues(client, sinceTimestamp, warnings) {
 
         hasMore = issues.length === maxResults;
         startAt += maxResults;
+        if (hasMore && run) await setCursor(run, unit, startAt);
       }
 
+      if (run) await markDone(run, unit);
       logger.debug(`[Sync] Synced ${totalIssues} updated issues for board ${board.id}`);
     } catch (error) {
       logger.error(`[Sync] Failed to sync updated issues for board ${board.id}:`, error);
@@ -458,8 +536,15 @@ async function upsertIssues(issues, boardId, sprintId) {
 
   await putBulk(STORES.USERS, usersToUpdate);
 
-  // Build map of existing issues for diff tracking
-  const oldIssuesList = await getAll(STORES.ISSUES);
+  // Build map of existing issues for diff tracking.
+  //
+  // Only the keys in THIS batch — previously this was getAll(ISSUES), which
+  // read every cached issue (each carrying a multi-kilobyte `raw_data` blob)
+  // once per page of every sprint of every board. On a 7,500-issue instance
+  // that is hundreds of full-store reads per sync: the tab slowed to a crawl
+  // and eventually died, which is what "the sync stops part way" looked like.
+  const batchKeys = issues.map(issue => issue.key).filter(Boolean);
+  const oldIssuesList = await getMany(STORES.ISSUES, batchKeys);
   const oldIssueMap = new Map();
   for (const old of oldIssuesList) {
     oldIssueMap.set(old.key, old);
@@ -681,21 +766,28 @@ async function countChangelogEntries() {
 export async function getSyncStatus() {
   try {
     await initDatabase();
-    const issues = await getAll(STORES.ISSUES);
+    // count() rather than getAll().length — this runs on every status refresh,
+    // and there is no reason to deserialise thousands of issues to get a number.
+    const issueCount = await count(STORES.ISSUES);
     const lastFullSync = await getMetadata('last_full_sync');
     const lastSync = await getMetadata('last_sync');
+    const interrupted = await pendingRun();
 
     return {
       lastFullSync: lastFullSync,
       lastSync: lastSync,
-      issueCount: issues.length
+      issueCount,
+      // Present when a previous run stopped part way. The next sync resumes
+      // from here rather than starting over.
+      interrupted
     };
   } catch (error) {
     logger.warn('[Sync] Could not get sync status:', error.message);
     return {
       lastFullSync: null,
       lastSync: null,
-      issueCount: 0
+      issueCount: 0,
+      interrupted: null
     };
   }
 }

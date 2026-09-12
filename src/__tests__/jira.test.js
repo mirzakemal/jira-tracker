@@ -124,8 +124,8 @@ describe('JiraClient', () => {
     });
 
     const client = new JiraClient({ domain: 'd.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true });
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrowError(JiraError);
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrow('Rate limited');
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrowError(JiraError);
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrow('Rate limited');
   });
 
   it('request handles 5xx server error', async () => {
@@ -137,8 +137,8 @@ describe('JiraClient', () => {
     });
 
     const client = new JiraClient({ domain: 'd.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true });
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrowError(JiraError);
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrow('server error');
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrowError(JiraError);
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrow('server error');
   });
 
   it('testConnection calls /rest/api/3/myself', async () => {
@@ -164,7 +164,9 @@ describe('JiraClient', () => {
 
     const client = new JiraClient({ domain: 'd.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true });
     const projects = await client.getProjects();
-    expect(projects).toEqual({ values: [{ id: 1, name: 'Project 1' }] });
+    // Paginated now, so this returns the collected values rather than the
+    // raw first-page envelope.
+    expect(projects).toEqual([{ id: 1, name: 'Project 1' }]);
   });
 
   it('getBoards returns board values', async () => {
@@ -207,8 +209,8 @@ describe('JiraClient', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
 
     const client = new JiraClient({ domain: 'd.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true });
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrowError(JiraError);
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrow('Network error');
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrowError(JiraError);
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrow('Network error');
   });
 
   it('handles generic Error with JiraError for non-fetch errors', async () => {
@@ -216,8 +218,8 @@ describe('JiraClient', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('something terrible happened'));
 
     const client = new JiraClient({ domain: 'd.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true });
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrowError(JiraError);
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrow('Request failed');
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrowError(JiraError);
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrow('Request failed');
   });
 
   it('handles network TypeError (connection refused) with JiraError', async () => {
@@ -226,8 +228,8 @@ describe('JiraClient', () => {
     global.fetch = vi.fn().mockRejectedValue(typeError);
 
     const client = new JiraClient({ domain: 'd.atlassian.net', email: 'a@b.com', apiToken: 'tok', useProxy: true });
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrowError(JiraError);
-    await expect(client.request('/rest/api/3/myself')).rejects.toThrow('Network error');
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrowError(JiraError);
+    await expect(client.request('/rest/api/3/myself', { attempts: 1 })).rejects.toThrow('Network error');
   });
 });
 

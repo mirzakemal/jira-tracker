@@ -39,11 +39,20 @@ export class SyncStatus {
    * Render the sync status component
    */
   render() {
-    const { lastSync, lastFullSync, issueCount } = this.syncStatus || {};
+    const { lastSync, lastFullSync, issueCount, interrupted } = this.syncStatus || {};
 
     const lastSyncText = lastSync
       ? timeAgo(new Date(lastSync))
       : 'Never';
+
+    // A run that stopped part way leaves a checkpoint behind. Say so, rather
+    // than showing a stale "last sync" and letting it look like nothing is
+    // wrong — the next sync continues from there instead of starting over.
+    const resumeHtml = (!this.isSyncing && interrupted)
+      ? `<span class="sync-resume" title="A previous sync stopped before finishing. Syncing again continues from where it stopped.">
+           ⏸ Sync incomplete — ${interrupted.doneCount} done, resumes on next sync
+         </span>`
+      : '';
 
     const badgeHtml = (!this.isSyncing && this.changeCount > 0)
       ? `<button class="sync-changes-badge" id="sync-changes-badge" title="View what changed">
@@ -60,10 +69,11 @@ export class SyncStatus {
           ${this.isSyncing ? 'disabled' : ''}
         >
           ${this.isSyncing ? '⟳' : '🔄'}
-          ${this.isSyncing ? 'Syncing...' : 'Sync'}
+          ${this.isSyncing ? 'Syncing...' : (interrupted ? 'Resume sync' : 'Sync')}
         </button>
 
         ${badgeHtml}
+        ${resumeHtml}
 
         <div class="sync-info">
           <span class="sync-count">${issueCount || 0} issues</span>

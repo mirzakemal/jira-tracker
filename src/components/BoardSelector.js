@@ -19,7 +19,11 @@ export class BoardSelector {
   async load(client) {
     try {
       const projectsData = await client.getProjects();
-      this.projects = projectsData.values || projectsData || [];
+      // Array first: `[].values` is Array.prototype.values, so the shorter
+      // `projectsData.values || projectsData` would assign that function.
+      this.projects = Array.isArray(projectsData)
+        ? projectsData
+        : (projectsData?.values || []);
 
       if (this.projects.length > 0 && !this.selectedProject) {
         this.selectedProject = this.projects[0].key;
