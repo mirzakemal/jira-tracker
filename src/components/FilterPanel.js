@@ -4,7 +4,7 @@
  * and checkbox dropdown multi-selects
  */
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 
 export class FilterPanel {
   constructor(filters, onFilterChange) {
@@ -181,7 +181,7 @@ export class FilterPanel {
           id="search-filter"
           class="filter-search-input"
           placeholder="Search by key or summary..."
-          value="${escapeHtml(this.filters.searchQuery || '')}"
+          value="${escapeAttr(this.filters.searchQuery || '')}"
         />
         ${hasValue ? `<button class="clear-field-btn" data-field="searchQuery" title="Clear search">×</button>` : ''}
       </div>
@@ -214,7 +214,7 @@ export class FilterPanel {
         <select id="${id}-filter" class="filter-select">
           <option value="">All ${label}s</option>
           ${options.map(o => `
-            <option value="${escapeHtml(o.value)}" ${String(selected) === String(o.value) ? 'selected' : ''}>
+            <option value="${escapeAttr(o.value)}" ${String(selected) === String(o.value) ? 'selected' : ''}>
               ${escapeHtml(o.label)}
             </option>
           `).join('')}
@@ -260,7 +260,7 @@ export class FilterPanel {
                 const checked = hasSelection && selected.includes(value);
                 return `
                   <label class="dropdown-option ${checked ? 'checked' : ''}">
-                    <input type="checkbox" value="${escapeHtml(String(value))}"
+                    <input type="checkbox" value="${escapeAttr(String(value))}"
                       data-field="${id}" ${checked ? 'checked' : ''}>
                     <span>${escapeHtml(String(display))}</span>
                   </label>
@@ -283,7 +283,7 @@ export class FilterPanel {
       return `<div class="multi-select-preview">${names.map((n, i) => `
         <span class="chip">
           ${escapeHtml(String(n))}
-          <button class="chip-remove" data-field="${fieldKey}" data-value="${escapeHtml(String(values[i]))}">×</button>
+          <button class="chip-remove" data-field="${fieldKey}" data-value="${escapeAttr(String(values[i]))}">×</button>
         </span>
       `).join('')}</div>`;
     }
@@ -599,7 +599,7 @@ export const FilterPanelStyles = `
 
   .filter-header h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: 18.5px;
     color: var(--text);
   }
 
@@ -608,7 +608,7 @@ export const FilterPanelStyles = `
     color: #fff;
     border-radius: 10px;
     padding: 1px 7px;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     min-width: 18px;
     text-align: center;
@@ -616,7 +616,7 @@ export const FilterPanelStyles = `
 
   .filter-issue-count {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .filter-search-bar {
@@ -629,7 +629,7 @@ export const FilterPanelStyles = `
     padding: 10px 36px 10px 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 16px;
     background: var(--bg);
     color: var(--text);
     box-sizing: border-box;
@@ -676,7 +676,7 @@ export const FilterPanelStyles = `
     border: none;
     background: var(--border-light);
     color: var(--text-h);
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     text-align: left;
@@ -687,7 +687,7 @@ export const FilterPanelStyles = `
   }
 
   .filter-section-arrow {
-    font-size: 10px;
+    font-size: 11.5px;
     transition: transform 0.15s ease;
     color: var(--text-secondary);
   }
@@ -695,7 +695,7 @@ export const FilterPanelStyles = `
   .filter-section-title {
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
   }
 
@@ -720,7 +720,7 @@ export const FilterPanelStyles = `
   }
 
   .filter-field-header label {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -732,7 +732,7 @@ export const FilterPanelStyles = `
     padding: 7px 10px;
     border: 1px solid var(--border);
     border-radius: 5px;
-    font-size: 13px;
+    font-size: 15px;
     background: var(--bg);
     color: var(--text);
     width: 100%;
@@ -750,7 +750,7 @@ export const FilterPanelStyles = `
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1;
     padding: 2px 4px;
     border-radius: 3px;
@@ -774,7 +774,7 @@ export const FilterPanelStyles = `
     padding: 7px 10px;
     border: 1px solid var(--border);
     border-radius: 5px;
-    font-size: 13px;
+    font-size: 15px;
     background: var(--bg);
     color: var(--text);
     cursor: pointer;
@@ -791,7 +791,7 @@ export const FilterPanelStyles = `
     color: #fff;
     border-radius: 8px;
     padding: 0 5px;
-    font-size: 10px;
+    font-size: 11.5px;
     font-weight: 600;
     margin-right: 2px;
   }
@@ -806,7 +806,7 @@ export const FilterPanelStyles = `
   }
 
   .multi-select-arrow {
-    font-size: 10px;
+    font-size: 11.5px;
     color: var(--text-secondary);
     flex-shrink: 0;
     margin-left: 6px;
@@ -845,7 +845,7 @@ export const FilterPanelStyles = `
     border-radius: 4px;
     background: var(--border-light);
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 12.5px;
     cursor: pointer;
   }
 
@@ -866,7 +866,7 @@ export const FilterPanelStyles = `
     padding: 6px 8px;
     border: 1px solid var(--border);
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 14px;
     background: var(--bg);
     color: var(--text);
   }
@@ -887,7 +887,7 @@ export const FilterPanelStyles = `
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
-    font-size: 13px;
+    font-size: 15px;
     cursor: pointer;
     transition: background 0.1s;
   }
@@ -916,7 +916,7 @@ export const FilterPanelStyles = `
     flex-wrap: wrap;
     gap: 4px;
     margin-top: 4px;
-    font-size: 11px;
+    font-size: 12.5px;
   }
 
   .chip {
@@ -925,7 +925,7 @@ export const FilterPanelStyles = `
     gap: 3px;
     padding: 2px 6px;
     border-radius: 3px;
-    font-size: 11px;
+    font-size: 12.5px;
     background: var(--hover);
     color: var(--text);
   }
@@ -941,7 +941,7 @@ export const FilterPanelStyles = `
     color: var(--text-secondary);
     cursor: pointer;
     border-radius: 50%;
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1;
     padding: 0;
   }

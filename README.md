@@ -49,9 +49,38 @@ The app will open at `http://localhost:5173`.
 
 ### Environment Variables
 
+Copy the template and fill it in:
+
+```bash
+cp .env.example .env
+```
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_JIRA_DOMAIN` | Custom Jira domain for dev proxy | — |
+| `VITE_JIRA_DOMAIN` | Atlassian site for the dev proxy (`/rest`, `/agile`, `/wiki`) | `tenderboard.atlassian.net` |
+| `VITE_PRODUCT_BOARD_ID` | Jira board ID for the Product board | — |
+| `VITE_ENG_BOARD_ID` | Jira board ID for the Engineering board | — |
+| `VITE_CONFLUENCE_SPACE_KEY` | Confluence space for documentation drafts | — |
+| `VITE_USER_PERSONA_FIELD` | Custom field ID backing "User Persona" | — |
+
+### Credentials
+
+**API tokens are not environment variables in this app**, and there is no
+`CONFLUENCE_API_TOKEN` entry above on purpose.
+
+This is a browser-only app with no server. Vite inlines every `VITE_`-prefixed
+variable into the JavaScript bundle as plain text, so a token placed there is
+readable by anyone who loads the page. Non-`VITE_` variables are visible only to
+the Node build process, which never makes Atlassian calls — so they would not
+reach the client at all.
+
+Instead, Jira and Confluence tokens are entered in **Settings → Connect** and
+stored AES-GCM encrypted in localStorage (`src/utils/storage.js`). One Atlassian
+API token works for both products — create it at
+[id.atlassian.com/manage/api-tokens](https://id.atlassian.com/manage/api-tokens).
+
+Holding tokens in env would require adding a real server-side component to keep
+them off the client.
 
 ## Usage
 
@@ -176,6 +205,7 @@ http://localhost:5173/?log=debug#/board
 - **Random IV** (12 bytes) — unique per encryption
 - Key material derived from `domain:email`
 - Zero server-side — runs entirely in browser, no data sent to third parties
+- The service worker does not cache Jira API responses; cached issue data lives only in IndexedDB
 - Never commit API tokens to version control
 
 ## Sync Behavior

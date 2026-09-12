@@ -221,7 +221,7 @@ export const QuickSearchPaletteStyles = `
   flex: 1;
   border: none;
   outline: none;
-  font-size: 15px;
+  font-size: 17px;
   background: transparent;
   color: var(--text);
 }
@@ -237,7 +237,7 @@ export const QuickSearchPaletteStyles = `
   padding: 32px 16px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 16px;
 }
 .palette-result {
   display: flex;
@@ -254,7 +254,7 @@ export const QuickSearchPaletteStyles = `
 }
 .palette-issue-key {
   font-family: monospace;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--link);
   flex-shrink: 0;
@@ -262,7 +262,7 @@ export const QuickSearchPaletteStyles = `
 }
 .palette-issue-summary {
   flex: 1;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -275,7 +275,7 @@ export const QuickSearchPaletteStyles = `
   flex-shrink: 0;
 }
 .palette-status {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
   background: var(--surface);
   padding: 2px 8px;
@@ -286,12 +286,12 @@ export const QuickSearchPaletteStyles = `
   gap: 16px;
   padding: 8px 16px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--text-muted);
 }
 .palette-footer kbd {
   font-family: monospace;
-  font-size: 10px;
+  font-size: 11.5px;
   padding: 1px 5px;
   background: var(--surface);
   border: 1px solid var(--border);

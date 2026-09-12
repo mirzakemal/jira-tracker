@@ -4,7 +4,7 @@
  */
 
 import { getDashboardData } from '../db/queries.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { openIssueDrawer } from './IssueDetailDrawer.js';
 import { navigate } from '../utils/router.js';
 import logger from '../utils/logger.js';
@@ -187,7 +187,7 @@ export class DashboardHomeView {
               return `
                 <div class="velocity-bar-group">
                   <div class="velocity-bar-wrapper">
-                    <div class="velocity-bar" style="height:${barH}%" title="${s.name}: ${s.velocity} completed of ${s.total} issues">
+                    <div class="velocity-bar" style="height:${barH}%" title="${escapeAttr(s.name || '')}: ${s.velocity} completed of ${s.total} issues">
                       <span class="velocity-bar-label">${s.velocity}</span>
                     </div>
                   </div>
@@ -273,8 +273,8 @@ export class DashboardHomeView {
             ${outliers.map(i => `
               <div class="aging-item">
                 <div class="aging-item-main">
-                  <a class="issue-link" href="#" data-issue-key="${escapeHtml(i.key)}">${escapeHtml(i.key)}</a>
-                  <span class="aging-summary" title="${escapeHtml(i.summary)}">${escapeHtml(i.summary)}</span>
+                  <a class="issue-link" href="#" data-issue-key="${escapeAttr(i.key)}">${escapeHtml(i.key)}</a>
+                  <span class="aging-summary" title="${escapeAttr(i.summary)}">${escapeHtml(i.summary)}</span>
                 </div>
                 <div class="aging-item-meta">
                   <span class="status-badge">${escapeHtml(i.status || '')}</span>
@@ -532,20 +532,20 @@ export const DashboardHomeViewStyles = `
 
   .card-title {
     margin: 0 0 16px;
-    font-size: 16px;
+    font-size: 18.5px;
     font-weight: 600;
     color: var(--text);
   }
 
   .card-empty {
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 16px;
     text-align: center;
     padding: 20px 0;
   }
 
   .card-stat {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text-secondary);
   }
 
@@ -592,13 +592,13 @@ export const DashboardHomeViewStyles = `
     top: -20px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text);
   }
 
   .velocity-sprint-label {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     margin-top: 6px;
     max-width: 80px;
@@ -633,13 +633,13 @@ export const DashboardHomeViewStyles = `
   }
 
   .risk-name {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     color: var(--text);
   }
 
   .risk-badge {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     text-transform: uppercase;
   }
@@ -661,7 +661,7 @@ export const DashboardHomeViewStyles = `
   .risk-item-stats {
     display: flex;
     gap: 16px;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
 
@@ -688,7 +688,7 @@ export const DashboardHomeViewStyles = `
   }
 
   .aging-summary {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -702,7 +702,7 @@ export const DashboardHomeViewStyles = `
   }
 
   .aging-days {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
 
@@ -725,7 +725,7 @@ export const DashboardHomeViewStyles = `
   }
 
   .workload-name {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text);
     width: 140px;
     overflow: hidden;
@@ -750,7 +750,7 @@ export const DashboardHomeViewStyles = `
     align-items: center;
     justify-content: flex-end;
     padding-right: 8px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: white;
     min-width: 30px;
@@ -774,7 +774,7 @@ export const DashboardHomeViewStyles = `
     border-radius: 4px;
     background: var(--bg);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text);
   }
 
@@ -795,7 +795,7 @@ export const DashboardHomeViewStyles = `
   }
 
   .card-drilldown {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--accent);
     cursor: pointer;
     text-decoration: none;
@@ -823,7 +823,7 @@ export const DashboardHomeViewStyles = `
 
   /* Sprint date labels */
   .velocity-date-label {
-    font-size: 10px;
+    font-size: 11.5px;
     color: var(--text-secondary);
     opacity: 0.7;
   }
@@ -855,7 +855,7 @@ export const DashboardHomeViewStyles = `
     border: none;
     color: var(--accent);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 15px;
     padding: 4px 0;
   }
 
@@ -873,7 +873,7 @@ export const DashboardHomeViewStyles = `
     border-radius: 6px;
     color: var(--accent);
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
   }
   .analytics-toggle-btn:hover { background: var(--hover); }
 
@@ -918,7 +918,7 @@ export const DashboardHomeViewStyles = `
   .throughput-created { background: var(--primary); }
   .throughput-resolved { background: var(--success); }
   .throughput-label {
-    font-size: 9px;
+    font-size: 10.5px;
     color: var(--text-secondary);
     margin-top: 4px;
     white-space: nowrap;
@@ -930,7 +930,7 @@ export const DashboardHomeViewStyles = `
     align-items: center;
   }
   .throughput-legend {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
@@ -951,7 +951,7 @@ export const DashboardHomeViewStyles = `
   .cycletime-row { display: flex; align-items: center; gap: 10px; }
   .cycletime-type {
     width: 80px;
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -971,7 +971,7 @@ export const DashboardHomeViewStyles = `
     transition: width 0.3s;
   }
   .cycletime-value {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     white-space: nowrap;
     min-width: 60px;
@@ -996,7 +996,7 @@ export const DashboardHomeViewStyles = `
     flex-wrap: wrap;
   }
   .status-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
@@ -1024,7 +1024,7 @@ export const DashboardHomeViewStyles = `
     flex-wrap: wrap;
   }
   .backlog-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     display: flex;
     align-items: center;

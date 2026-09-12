@@ -284,13 +284,13 @@ export const RoadmapViewStyles = `
   }
   .roadmap-title {
     margin: 0;
-    font-size: 18px;
+    font-size: 20.5px;
     font-weight: 700;
     color: var(--text, #e0e0e0);
     white-space: nowrap;
   }
   .roadmap-date-range {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary, #888);
     background: var(--hover, #2a2a44);
     padding: 3px 10px;
@@ -316,7 +316,7 @@ export const RoadmapViewStyles = `
     padding: 4px 10px;
     background: var(--hover, #2a2a44);
     border-radius: 16px;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary, #888);
   }
   .stat-pill-value {
@@ -324,7 +324,7 @@ export const RoadmapViewStyles = `
     color: var(--text, #e0e0e0);
   }
   .stat-pill-label {
-    font-size: 11px;
+    font-size: 12.5px;
   }
   .stat-pill-progress .stat-pill-value {
     color: var(--accent, #4f8cff);

@@ -5,7 +5,7 @@
 
 import { IssueCard } from './IssueCard.js';
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import logger from '../utils/logger.js';
 
 export class IssueBoard {
@@ -90,12 +90,12 @@ export class IssueBoard {
       <div class="issue-board">
         <div class="board-columns">
           ${sortedColumns.map(([status, issues]) => `
-            <div class="board-column" data-status="${escapeHtml(status)}">
+            <div class="board-column" data-status="${escapeAttr(status)}">
               <div class="column-header">
                 <span class="column-title">${escapeHtml(status)}</span>
                 <span class="column-count">${issues.length}</span>
               </div>
-              <div class="column-content" data-status="${escapeHtml(status)}">
+              <div class="column-content" data-status="${escapeAttr(status)}">
                 ${issues.map(issue => new IssueCard(issue).render()).join('')}
               </div>
             </div>

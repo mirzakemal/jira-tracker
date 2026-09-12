@@ -5,6 +5,8 @@
 
 import { JiraClient, JiraError } from '../api/jira.js';
 import { loadCredentials, saveCredentials, clearCredentials } from '../utils/storage.js';
+import { shouldUseProxy } from '../utils/proxy.js';
+import { usesServerAuth } from '../utils/auth-mode.js';
 
 export class SettingsPanel {
   constructor(onConnect, savedUser = null) {
@@ -21,6 +23,11 @@ export class SettingsPanel {
 
   render() {
     const saved = this.savedCredentials || {};
+
+    // Under server auth there is no credential to collect — the proxy holds
+    // it. Showing a token field here would invite someone to paste one back
+    // into the browser.
+    if (usesServerAuth()) return this.renderServerAuth();
 
     return `
       <div class="settings-panel">
@@ -99,7 +106,42 @@ export class SettingsPanel {
     `;
   }
 
+  /**
+   * Connection screen when the proxy owns the credential.
+   *
+   * Only reached when the automatic connection failed, so it explains where to
+   * look rather than offering a form that cannot help.
+   */
+  renderServerAuth() {
+    return `
+      <div class="settings-panel">
+        <div class="settings-header">
+          <h2>Jira Connection</h2>
+          <span class="connection-status disconnected">○ Not connected</span>
+        </div>
+        <div class="settings-server-auth">
+          <p>
+            This deployment keeps the Atlassian credential on the server, so
+            there is nothing to sign in with here.
+          </p>
+          <p class="settings-hint">
+            The app could not reach Jira through the proxy. That usually means
+            the proxy is misconfigured or its credential has expired — check
+            the <code>/rest</code> route and the server logs.
+          </p>
+          <button class="btn btn-primary" id="server-auth-retry">Retry</button>
+        </div>
+      </div>
+    `;
+  }
+
   bindEvents() {
+    if (usesServerAuth()) {
+      document.getElementById('server-auth-retry')
+        ?.addEventListener('click', () => window.location.reload());
+      return;
+    }
+
     const form = document.getElementById('settings-form');
     const connectBtn = document.getElementById('btn-connect');
     const disconnectBtn = document.getElementById('btn-disconnect');
@@ -128,8 +170,7 @@ export class SettingsPanel {
 
     try {
       // Use proxy in development (localhost) to avoid CORS issues
-      const isDevelopment = window.location.hostname === 'localhost';
-      this.client = new JiraClient({ domain, email, apiToken: token, useProxy: isDevelopment });
+      this.client = new JiraClient({ domain, email, apiToken: token, useProxy: shouldUseProxy() });
       this.user = await this.client.testConnection();
       this.isConnected = true;
 

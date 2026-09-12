@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { formatDate } from '../utils/date.js';
 
 export class IssueDetailDrawer {
@@ -72,7 +72,7 @@ export class IssueDetailDrawer {
           </div>
           <div class="drawer-actions">
             <a href="${jiraUrl}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">Open in Jira</a>
-            <button class="btn btn-secondary btn-sm" id="dep-graph-btn" data-issue="${escapeHtml(i.key)}" data-summary="${escapeHtml(i.summary || '')}" aria-label="Show dependencies">Dependencies</button>
+            <button class="btn btn-secondary btn-sm" id="dep-graph-btn" data-issue="${escapeAttr(i.key)}" data-summary="${escapeAttr(i.summary || '')}" aria-label="Show dependencies">Dependencies</button>
             <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
           </div>
         </div>
@@ -139,7 +139,9 @@ export class IssueDetailDrawer {
   }
 
   renderDescription() {
-    const body = this._getADFContent('description');
+    // Fall back to the flattened description on the issue record when raw_data
+    // has none — older cached issues, or a sync that did not return the field.
+    const body = this._getADFContent('description') || this.issue?.description || null;
     if (!body) {
       return `
         <div class="issue-section">
@@ -147,6 +149,18 @@ export class IssueDetailDrawer {
           <div class="issue-description"><span class="no-data">No description</span></div>
         </div>`;
     }
+
+    // A plain-string description (Jira text fields, or an already-flattened
+    // value) must keep its line breaks. Dumped through escapeHtml alone it
+    // collapses into one unreadable wall — markdown pipes, bullets and all.
+    if (typeof body === 'string') {
+      return `
+        <div class="issue-section">
+          <h4>Description</h4>
+          <div class="issue-description issue-description-plain">${escapeHtml(body)}</div>
+        </div>`;
+    }
+
     return `
       <div class="issue-section">
         <h4>Description</h4>
@@ -164,7 +178,7 @@ export class IssueDetailDrawer {
           ${subtasks.map(s => `
             <div class="subtask-item">
               <span class="subtask-status">${escapeHtml(s.fields?.status?.name || 'Unknown')}</span>
-              <a href="#" class="subtask-key" data-issue-key="${escapeHtml(s.key)}">${escapeHtml(s.key)}</a>
+              <a href="#" class="subtask-key" data-issue-key="${escapeAttr(s.key)}">${escapeHtml(s.key)}</a>
               <span class="subtask-summary">${escapeHtml(s.fields?.summary || '')}</span>
             </div>
           `).join('')}
@@ -184,10 +198,12 @@ export class IssueDetailDrawer {
             const isOutward = !!(link.outwardIssue);
             const linked = isOutward ? link.outwardIssue : link.inwardIssue;
             if (!linked) return '';
+            // Raw Jira payload carries the type here, so no cache lookup needed.
+            const isEpic = /\bepic\b/i.test(linked.fields?.issuetype?.name || '');
             return `
-              <div class="linked-issue-item">
+              <div class="linked-issue-item${isEpic ? ' linked-issue-epic' : ''}"${isEpic ? ' title="Epic"' : ''}>
                 <span class="link-type ${isOutward ? 'outward' : 'inward'}">${escapeHtml(type)}</span>
-                <a href="#" class="linked-issue-key" data-issue-key="${escapeHtml(linked.key)}">${escapeHtml(linked.key)}</a>
+                <a href="#" class="linked-issue-key" data-issue-key="${escapeAttr(linked.key)}">${isEpic ? '⚡ ' : ''}${escapeHtml(linked.key)}</a>
                 <span class="linked-issue-summary">${escapeHtml(linked.fields?.summary || '')}</span>
               </div>
             `;
@@ -253,7 +269,7 @@ export class IssueDetailDrawer {
             case 'strong': text = `<strong>${text}</strong>`; break;
             case 'em': text = `<em>${text}</em>`; break;
             case 'code': text = `<code>${text}</code>`; break;
-            case 'link': text = `<a href="${escapeHtml(mark.attrs?.href || '#')}" target="_blank" rel="noopener">${text}</a>`; break;
+            case 'link': text = `<a href="${escapeAttr(mark.attrs?.href || '#')}" target="_blank" rel="noopener">${text}</a>`; break;
             case 'strike': text = `<del>${text}</del>`; break;
             case 'underline': text = `<u>${text}</u>`; break;
           }
@@ -278,7 +294,7 @@ export class IssueDetailDrawer {
       case 'hardBreak': return '<br>';
       case 'mention': return `<span class="mention">@${escapeHtml(node.attrs?.text || 'unknown')}</span>`;
       case 'emoji': return escapeHtml(node.attrs?.text || node.attrs?.shortName || '');
-      case 'inlineCard': return `<a href="${escapeHtml(node.attrs?.url || '#')}" class="inline-card" target="_blank" rel="noopener">${escapeHtml(node.attrs?.url || 'link')}</a>`;
+      case 'inlineCard': return `<a href="${escapeAttr(node.attrs?.url || '#')}" class="inline-card" target="_blank" rel="noopener">${escapeHtml(node.attrs?.url || 'link')}</a>`;
       case 'media': return `<span class="media-placeholder">📎 Attachment</span>`;
       case 'table': return `<table class="adf-table">${inner}</table>`;
       case 'tableRow': return `<tr>${inner}</tr>`;
@@ -347,6 +363,13 @@ export class IssueDetailDrawer {
   }
 }
 
+/**
+ * Open the issue detail side drawer.
+ *
+ * @param {string} issueKey
+ * @param {string} jiraDomain
+ * @param {Function} onClose
+ */
 export function openIssueDrawer(issueKey, jiraDomain, onClose) {
   if (window.activeIssueDrawer) {
     window.activeIssueDrawer._cleanup();
@@ -393,6 +416,7 @@ export const IssueDetailDrawerStyles = `
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
   }
+
   .drawer-header {
     display: flex;
     justify-content: space-between;
@@ -410,21 +434,21 @@ export const IssueDetailDrawerStyles = `
   .drawer-title .issue-type-badge {
     padding: 2px 8px;
     border-radius: 4px;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     text-transform: uppercase;
     background: var(--primary, #6366f1);
     color: white;
   }
   .drawer-title .issue-key {
-    font-size: 16px;
+    font-size: 18.5px;
     font-weight: 700;
     color: var(--text, #e0e0e0);
   }
   .drawer-title .issue-status-badge {
     padding: 2px 10px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     background: var(--hover, #2a2a44);
     color: var(--text, #e0e0e0);
@@ -438,7 +462,7 @@ export const IssueDetailDrawerStyles = `
     background: none;
     border: none;
     color: var(--text-secondary, #999);
-    font-size: 24px;
+    font-size: 27.5px;
     cursor: pointer;
     padding: 0 4px;
     line-height: 1;
@@ -453,7 +477,7 @@ export const IssueDetailDrawerStyles = `
   }
   .issue-summary {
     margin: 0 0 16px 0;
-    font-size: 18px;
+    font-size: 20.5px;
     font-weight: 600;
     color: var(--text, #e0e0e0);
     line-height: 1.4;
@@ -470,14 +494,14 @@ export const IssueDetailDrawerStyles = `
     gap: 2px;
   }
   .meta-item label {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     text-transform: uppercase;
     color: var(--text-secondary, #888);
     letter-spacing: 0.3px;
   }
   .meta-item span {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text, #e0e0e0);
   }
   .issue-section {
@@ -485,18 +509,48 @@ export const IssueDetailDrawerStyles = `
   }
   .issue-section h4 {
     margin: 0 0 8px 0;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text, #e0e0e0);
     padding-bottom: 6px;
     border-bottom: 1px solid var(--border, #333);
   }
+  /* Long descriptions (some product cards run to several screens of tables)
+     scroll inside the panel instead of pushing everything else off-screen. */
+  /* Epic links are ringed in orange, matching the Product Board. */
+  .linked-issue-epic {
+    border: 2px solid var(--warning, #d97706);
+    border-radius: var(--radius-sm, 6px);
+    padding: 4px 8px;
+  }
+  .linked-issue-epic .linked-issue-key { color: var(--warning, #d97706); font-weight: 700; }
+
   .issue-description {
-    font-size: 14px;
+    max-height: 420px;
+    overflow-y: auto;
+    font-size: 16px;
     line-height: 1.6;
     color: var(--text, #e0e0e0);
     white-space: pre-wrap;
   }
+  .issue-description-plain {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  .adf-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .adf-table td, .adf-table th {
+    border: 1px solid var(--border, #333);
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .adf-table th { background: var(--surface-sunken, #222); font-weight: 600; }
   .issue-description p {
     margin: 0 0 8px 0;
   }
@@ -509,20 +563,20 @@ export const IssueDetailDrawerStyles = `
   }
   .issue-description h1, .issue-description h2, .issue-description h3, .issue-description h4 {
     margin: 12px 0 6px 0;
-    font-size: 14px;
+    font-size: 16px;
   }
   .issue-description code {
     background: var(--hover, #2a2a44);
     padding: 1px 4px;
     border-radius: 3px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .issue-description pre {
     background: var(--hover, #2a2a44);
     padding: 10px;
     border-radius: 6px;
     overflow-x: auto;
-    font-size: 12px;
+    font-size: 14px;
     margin: 8px 0;
   }
   .issue-description blockquote {
@@ -540,14 +594,14 @@ export const IssueDetailDrawerStyles = `
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 15px;
     padding: 6px 8px;
     background: var(--surface, #1e1e36);
     border-radius: 6px;
     border: 1px solid var(--border, #333);
   }
   .subtask-status {
-    font-size: 11px;
+    font-size: 12.5px;
     padding: 1px 8px;
     border-radius: 10px;
     background: var(--hover, #2a2a44);
@@ -570,7 +624,7 @@ export const IssueDetailDrawerStyles = `
     flex: 1;
   }
   .link-type {
-    font-size: 10px;
+    font-size: 11.5px;
     padding: 1px 6px;
     border-radius: 3px;
     font-style: italic;
@@ -595,17 +649,17 @@ export const IssueDetailDrawerStyles = `
     border: 1px solid var(--border, #333);
   }
   .comment-author {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text, #e0e0e0);
   }
   .comment-date {
-    font-size: 11px;
+    font-size: 12.5px;
     color: var(--text-secondary, #888);
     margin-bottom: 6px;
   }
   .comment-body {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text, #e0e0e0);
     line-height: 1.5;
     white-space: pre-wrap;
@@ -618,7 +672,7 @@ export const IssueDetailDrawerStyles = `
   .tag-badge {
     padding: 2px 10px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 14px;
     background: var(--hover, #2a2a44);
     color: var(--text-secondary, #ccc);
     border: 1px solid var(--border, #444);
@@ -626,7 +680,7 @@ export const IssueDetailDrawerStyles = `
   .no-data {
     color: var(--text-secondary, #888);
     font-style: italic;
-    font-size: 13px;
+    font-size: 15px;
   }
   .mention {
     color: var(--primary, #6366f1);
@@ -642,7 +696,7 @@ export const IssueDetailDrawerStyles = `
   .adf-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 14px;
   }
   .adf-table td {
     padding: 6px 8px;

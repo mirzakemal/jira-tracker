@@ -5,6 +5,10 @@
  */
 
 export const CUSTOM_FIELDS = {
+  // Story Points. Verified as customfield_10014 on this instance — the common
+  // customfield_10016/10026 defaults do NOT exist here. Override per instance.
+  storyPoints: 'customfield_10014',
+
   // Customer field used for multi-value customer tracking
   customer: 'customfield_10043',
 
@@ -15,13 +19,24 @@ export const CUSTOM_FIELDS = {
 
 /**
  * Pattern-based custom field detection.
- * These search the field name (lowercased) to find the right field.
- * Only used when the exact CUSTOM_FIELDS mapping doesn't match.
+ *
+ * Matched against the field's DISPLAY NAME (lowercased), resolved from
+ * /rest/api/3/field at sync time — NOT against the "customfield_NNNNN" key,
+ * which never contains a human word. Used when the exact CUSTOM_FIELDS mapping
+ * above doesn't name a field id.
+ *
+ * Verified names on this instance: "Story Points" (customfield_10014),
+ * "QA Tester" (customfield_10040), "QA Reviewer" (customfield_10041).
  */
 export const FIELD_PATTERNS = {
-  // If a custom field name contains any of these strings, map it to product
+  // If a custom field NAME contains any of these, map it to product
   product: ['product'],
 
-  // If a custom field name contains any of these strings, map it to QA tester
-  qaTester: ['qa', 'tester']
+  // If a custom field NAME contains any of these, map it to QA tester.
+  // Ordered most- to least-specific: the first pattern to match a field wins,
+  // so "QA Tester" is preferred over a bare "QA ..." field.
+  qaTester: ['qa tester', 'tester', 'qa'],
+
+  // Story Points, so a renamed or re-created field still resolves.
+  storyPoints: ['story points', 'story point']
 };

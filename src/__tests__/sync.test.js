@@ -204,3 +204,154 @@ describe('sync engine', () => {
     });
   });
 });
+
+describe('Issue links survive an incremental sync', () => {
+  let db;
+
+  beforeEach(async () => {
+    db = await import('../db/indexeddb.js');
+    await db.initDatabase();
+    for (const s of ['issues', 'issuelinks', 'metadata', 'changelog']) {
+      try { await db.clear(s); } catch { /* ignore */ }
+    }
+  });
+
+  it('deleteByIndex removes only the matching source rows', async () => {
+    await db.put('issuelinks', { source_key: 'PDT-12', target_key: 'TSM2-7252', link_type: 'Polaris work item link' });
+    await db.put('issuelinks', { source_key: 'PDT-12', target_key: 'MDP-1', link_type: 'Relates' });
+    await db.put('issuelinks', { source_key: 'PDT-62', target_key: 'TSM2-4395', link_type: 'Polaris work item link' });
+
+    const removed = await db.deleteByIndex('issuelinks', 'source_key', 'PDT-12');
+
+    expect(removed).toBe(2);
+    const left = await db.getAll('issuelinks');
+    expect(left.map(l => l.source_key)).toEqual(['PDT-62']);
+  });
+
+  it('an untouched issue keeps its links when another issue re-syncs', async () => {
+    // PDT-12 was synced previously and has not changed since.
+    await db.put('issuelinks', { source_key: 'PDT-12', target_key: 'TSM2-7252', link_type: 'Polaris work item link' });
+    // An incremental sync now refetches only PDT-62 and replaces ITS links.
+    await db.put('issuelinks', { source_key: 'PDT-62', target_key: 'TSM2-0000', link_type: 'Relates' });
+    await db.deleteByIndex('issuelinks', 'source_key', 'PDT-62');
+    await db.put('issuelinks', { source_key: 'PDT-62', target_key: 'TSM2-4395', link_type: 'Polaris work item link' });
+
+    const links = await db.getAll('issuelinks');
+    const bySource = Object.fromEntries(links.map(l => [l.source_key, l.target_key]));
+
+    expect(bySource['PDT-12']).toBe('TSM2-7252');   // preserved
+    expect(bySource['PDT-62']).toBe('TSM2-4395');   // replaced, not duplicated
+    expect(links).toHaveLength(2);
+  });
+});
+
+describe('Custom field detection through a real sync', () => {
+  let db, sync;
+
+  const FIELDS = [
+    { id: 'customfield_10014', name: 'Story Points', custom: true },
+    { id: 'customfield_10040', name: 'QA Tester', custom: true },
+    { id: 'customfield_10041', name: 'QA Reviewer', custom: true },
+    { id: 'customfield_10077', name: 'Product Area', custom: true }
+  ];
+
+  /** A client that serves one board with one richly-populated issue. */
+  function fakeClient() {
+    return {
+      getFields: async () => FIELDS,
+      getProjects: async () => ({ values: [{ id: '1', key: 'TSM2', name: 'TenderBoard Sprints' }] }),
+      getBoards: async () => [{ id: 200, name: 'TSM2 board', type: 'scrum', project: { key: 'TSM2' } }],
+      getSprints: async () => [],
+      getBoardIssues: async (boardId, jql, startAt) => startAt > 0 ? { issues: [] } : {
+        issues: [{
+          key: 'TSM2-8294',
+          id: '68523',
+          fields: {
+            project: { key: 'TSM2' },
+            summary: 'Activity validation fails',
+            status: { name: 'Ready for Regression', statusCategory: { name: 'Done' } },
+            updated: '2026-09-12T05:24:50.076+0800',
+            customfield_10014: 5,
+            customfield_10040: { accountId: 'acc-qa', displayName: 'Tan Khay Ong' },
+            customfield_10077: { value: 'Product' }
+          }
+        }]
+      }
+    };
+  }
+
+  beforeEach(async () => {
+    db = await import('../db/indexeddb.js');
+    sync = await import('../db/sync.js');
+    await db.initDatabase();
+    for (const s of ['issues', 'issuelinks', 'metadata', 'changelog', 'projects', 'boards', 'sprints', 'users']) {
+      try { await db.clear(s); } catch { /* ignore */ }
+    }
+  });
+
+  it('populates story points, QA tester and product from named fields', async () => {
+    await sync.syncAll(fakeClient());
+
+    const issue = await db.get('issues', 'TSM2-8294');
+    expect(issue.story_points).toBe(5);
+    expect(issue.qa_tester_id).toBe('acc-qa');
+    expect(issue.product).toBe('Product');
+  });
+
+  it('still syncs when the field list cannot be fetched', async () => {
+    const client = fakeClient();
+    client.getFields = async () => { throw new Error('403 Forbidden'); };
+
+    const result = await sync.syncAll(client);
+
+    expect(result.success).toBe(true);
+    const issue = await db.get('issues', 'TSM2-8294');
+    // Story Points is pinned in config, so it survives without metadata.
+    expect(issue.story_points).toBe(5);
+    // Product is name-detected only, so it degrades to null rather than failing.
+    expect(issue.product).toBeNull();
+  });
+});
+
+describe('Service worker does not fake Jira failures', () => {
+  let source;
+
+  beforeEach(async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    // Vitest runs from the project root, so resolve from cwd rather than
+    // import.meta.url, which jsdom rewrites to an http:// URL.
+    source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8');
+  });
+
+  it('no longer races API requests against an artificial timeout', () => {
+    // The 8s race turned a slow-but-healthy Jira into a synthetic 503, which
+    // api/jira.js reported as "Jira server error. Please try again later".
+    expect(source).not.toContain('timeoutPromise');
+    expect(source).not.toContain("new Error('timeout')");
+  });
+
+  it('synthesises no 503 for API requests', () => {
+    expect(source).not.toContain("error: 'offline'");
+    // The only remaining 503 is the HTML offline page for a navigation, which
+    // never reaches JiraClient.
+    const statuses = [...source.matchAll(/status:\s*503/g)];
+    expect(statuses).toHaveLength(1);
+    expect(source).toContain('A navigation with nothing cached');
+  });
+
+  it('passes Jira, agile and Confluence paths straight through', () => {
+    expect(source).toContain("url.pathname.startsWith('/rest/')");
+    expect(source).toContain("url.pathname.startsWith('/agile/')");
+    expect(source).toContain("url.pathname.startsWith('/wiki/')");
+  });
+
+  it('stores no authenticated API responses', () => {
+    expect(source).not.toContain('API_CACHE');
+  });
+
+  it('purges caches from earlier versions on activate', () => {
+    expect(source).toContain("CACHE_VERSION = 'v2'");
+    expect(source).toContain("name.startsWith('jira-planner-') && name !== STATIC_CACHE");
+  });
+});

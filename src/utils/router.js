@@ -14,7 +14,9 @@ export const ROUTES = {
   DASHBOARD: 'dashboard',
   SETTINGS: 'settings',
   CFD: 'cfd',
-  STANDUP: 'standup'
+  STANDUP: 'standup',
+  PRODUCT: 'product',
+  CUSTOMERS: 'customers'
 };
 
 /**

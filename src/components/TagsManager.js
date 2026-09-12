@@ -18,7 +18,7 @@ export const TagsManagerStyles = `
   }
 
   .no-tags {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     font-style: italic;
   }
@@ -40,7 +40,7 @@ export const TagsManagerStyles = `
     color: white;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 18.5px;
     font-weight: bold;
     transition: all 0.2s ease;
   }

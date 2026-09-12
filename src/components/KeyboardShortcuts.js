@@ -173,7 +173,7 @@ export const KeyboardShortcutsStyles = `
     display: inline-block;
     padding: 2px 7px;
     font-family: var(--mono, monospace);
-    font-size: 12px;
+    font-size: 14px;
     background: var(--surface-sunken, var(--border-light));
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -181,7 +181,7 @@ export const KeyboardShortcutsStyles = `
     text-align: center;
   }
   .shortcut-desc {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--text-muted);
   }
   .kb-selected {

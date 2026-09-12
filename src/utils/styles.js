@@ -27,7 +27,7 @@ export const viewHeaderStyles = `
   .view-header-left h2 {
     margin: 0;
     color: var(--text-h);
-    font-size: 22px;
+    font-size: 25.5px;
     font-weight: 700;
     letter-spacing: -0.025em;
   }
@@ -51,7 +51,7 @@ export const backButtonStyles = `
     border-radius: var(--radius-md);
     cursor: pointer;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     box-shadow: var(--shadow-xs);
     transition: background var(--dur-fast) var(--ease-out),
@@ -87,7 +87,7 @@ export const loadingContainerStyles = `
 
   .loading-container p {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .loading-board {
@@ -109,7 +109,7 @@ export const emptyStateStyles = `
     text-align: center;
     padding: 72px 24px;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .empty-board {
@@ -121,7 +121,7 @@ export const emptyStateStyles = `
   .empty-state .empty-hint,
   .table-view-empty .empty-hint,
   .roadmap-empty .empty-hint {
-    font-size: 13px;
+    font-size: 15px;
     margin-top: 8px;
     opacity: 0.85;
     color: var(--text-muted);
@@ -220,13 +220,13 @@ export const modalHeaderStyles = `
   .column-customizer h4 {
     margin: 0;
     color: var(--text-h);
-    font-size: 18px;
+    font-size: 20.5px;
     font-weight: 600;
     letter-spacing: -0.015em;
   }
 
   .modal-header h2 {
-    font-size: 20px;
+    font-size: 23px;
     letter-spacing: -0.02em;
   }
 `
@@ -240,7 +240,7 @@ export const modalCloseStyles = `
     height: 32px;
     background: transparent;
     border: none;
-    font-size: 20px;
+    font-size: 23px;
     line-height: 1;
     cursor: pointer;
     color: var(--text-muted);
@@ -276,7 +276,7 @@ export const formGroupStyles = `
   .toolbar-group label,
   .tags-filter label,
   .select-group label {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -284,7 +284,7 @@ export const formGroupStyles = `
   }
 
   .form-group label {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--text-h);
     text-transform: none;
@@ -310,7 +310,7 @@ export const formInputStyles = `
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     font-family: inherit;
-    font-size: 14px;
+    font-size: 16px;
     background: var(--surface);
     color: var(--text-h);
     transition: border-color var(--dur-fast) var(--ease-out),
@@ -322,7 +322,7 @@ export const formInputStyles = `
   .toolbar-select,
   .tag-input {
     padding: 7px 12px;
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .form-group input:hover,
@@ -354,7 +354,7 @@ export const formInputStyles = `
   }
 
   .form-group small {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-muted);
     line-height: 1.5;
   }
@@ -435,7 +435,7 @@ export const borderButtonStyles = `
     border-radius: var(--radius-md);
     cursor: pointer;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     box-shadow: var(--shadow-xs);
     transition: background var(--dur-fast) var(--ease-out),
@@ -449,7 +449,7 @@ export const borderButtonStyles = `
     background: transparent;
     color: var(--text-muted);
     box-shadow: none;
-    font-size: 12.5px;
+    font-size: 14.5px;
   }
 
   .toolbar-btn {
@@ -484,7 +484,7 @@ export const borderButtonStyles = `
 export const btnSmStyles = `
   .btn-sm {
     padding: 6px 12px;
-    font-size: 12.5px;
+    font-size: 14.5px;
   }
 `
 
@@ -504,7 +504,7 @@ export const badgeBaseStyles = `
     gap: 4px;
     padding: 3px 9px;
     border-radius: var(--radius-full);
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 500;
     letter-spacing: -0.005em;
     line-height: 1.4;
@@ -520,13 +520,13 @@ export const badgeBaseStyles = `
     color: var(--primary);
     border: 1px solid var(--primary-border);
     border-radius: var(--radius-full);
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 500;
   }
 
   .tags-editor-existing .tag-badge {
     padding: 4px 10px;
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .status-badge,
@@ -541,7 +541,7 @@ export const badgeBaseStyles = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    font-size: 10.5px;
+    font-size: 12px;
   }
 
   .chip {
@@ -576,6 +576,20 @@ export const panelBaseStyles = `
     border-color: var(--border);
     margin-bottom: 20px;
     box-shadow: var(--shadow-xs);
+  }
+
+  /* Connection screen when the proxy owns the credential — no form to fill. */
+  .settings-server-auth {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 20px;
+  }
+  .settings-server-auth p { margin: 0; line-height: 1.5; }
+  .settings-server-auth .settings-hint {
+    color: var(--text-muted);
+    font-size: 14px;
   }
 
   .settings-panel {
@@ -616,7 +630,7 @@ export const errorMessageStyles = `
     color: var(--danger);
     padding: 11px 14px;
     border-radius: var(--radius-md);
-    font-size: 13px;
+    font-size: 15px;
     line-height: 1.5;
   }
 `
@@ -681,7 +695,7 @@ export const tagRemoveStyles = `
     color: var(--primary);
     cursor: pointer;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1;
     transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
     padding: 0;
@@ -716,7 +730,7 @@ export const tagsEditorBodyStyles = `
   }
 
   .tags-editor-summary {
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text-muted);
     margin: 0;
     line-height: 1.5;
@@ -740,7 +754,7 @@ export const issueLinkStyles = `
   .issue-link {
     color: var(--primary);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     font-family: var(--mono);
     letter-spacing: 0.01em;

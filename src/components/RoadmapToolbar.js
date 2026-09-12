@@ -3,7 +3,7 @@
  * Provides date range selection, grouping options, and zoom controls
  */
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 
 export class RoadmapToolbar {
   constructor(filters, onFilterChange, projects = []) {
@@ -69,7 +69,7 @@ export class RoadmapToolbar {
               <select id="roadmap-project" class="toolbar-select">
                 <option value="">All Projects</option>
                 ${this.projects.map(p => `
-                  <option value="${escapeHtml(p.key)}" ${this.filters.projectKey === p.key ? 'selected' : ''}>
+                  <option value="${escapeAttr(p.key)}" ${this.filters.projectKey === p.key ? 'selected' : ''}>
                     ${escapeHtml(p.key)}
                   </option>
                 `).join('')}
@@ -256,7 +256,7 @@ export const RoadmapToolbarStyles = `
   }
   .toolbar-date-sep {
     color: var(--text-secondary, #888);
-    font-size: 13px;
+    font-size: 15px;
   }
   .toolbar-input {
     padding: 6px 10px;
@@ -264,7 +264,7 @@ export const RoadmapToolbarStyles = `
     border-radius: 6px;
     background: var(--bg, #1a1a2e);
     color: var(--text, #e0e0e0);
-    font-size: 13px;
+    font-size: 15px;
     font-family: inherit;
   }
   .toolbar-input:focus {
@@ -282,7 +282,7 @@ export const RoadmapToolbarStyles = `
     border-radius: 6px;
     background: var(--bg, #1a1a2e);
     color: var(--text-secondary, #888);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s;
@@ -306,7 +306,7 @@ export const RoadmapToolbarStyles = `
     border-radius: 6px;
     background: var(--bg, #1a1a2e);
     color: var(--text, #e0e0e0);
-    font-size: 13px;
+    font-size: 15px;
     cursor: pointer;
     transition: all 0.15s;
     font-family: inherit;
@@ -341,7 +341,7 @@ export const RoadmapToolbarStyles = `
     border-radius: 50%;
     background: var(--accent, #4f8cff);
     color: white;
-    font-size: 10px;
+    font-size: 11.5px;
     font-weight: 700;
     margin-left: 2px;
   }
@@ -362,7 +362,7 @@ export const RoadmapToolbarStyles = `
     gap: 4px;
   }
   .toolbar-group label {
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text-secondary, #888);
     text-transform: uppercase;
@@ -374,7 +374,7 @@ export const RoadmapToolbarStyles = `
     border-radius: 6px;
     background: var(--surface, #1e1e36);
     color: var(--text, #e0e0e0);
-    font-size: 13px;
+    font-size: 15px;
     font-family: inherit;
     min-width: 120px;
   }

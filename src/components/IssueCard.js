@@ -3,7 +3,7 @@
  * Displays a single Jira issue
  */
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, escapeAttr } from '../utils/html.js';
 
 export class IssueCard {
   constructor(issue) {
@@ -20,26 +20,26 @@ export class IssueCard {
     return `
       <div class="issue-card" draggable="true" data-issue-key="${key}">
         <div class="issue-card-header">
-          <span class="issue-type-icon" title="${escapeHtml(fields.issuetype?.name || 'Issue')}">
+          <span class="issue-type-icon" title="${escapeAttr(fields.issuetype?.name || 'Issue')}">
             ${issueTypeIcon}
           </span>
           <a href="https://${(window.jiraDomain || '').replace(/^https?:\/\//, '')}/browse/${key}" target="_blank" class="issue-key" onclick="event.stopPropagation()">
             ${key}
           </a>
         </div>
-        <div class="issue-summary" title="${escapeHtml(fields.summary)}">
+        <div class="issue-summary" title="${escapeAttr(fields.summary)}">
           ${escapeHtml(fields.summary)}
         </div>
         <div class="issue-card-footer">
-          <span class="issue-priority ${priorityClass}" title="Priority: ${escapeHtml(priority)}">
+          <span class="issue-priority ${priorityClass}" title="Priority: ${escapeAttr(priority)}">
             ${priorityIcon} ${escapeHtml(priority)}
           </span>
           ${fields.assignee ? `
             <img
-              src="${escapeHtml(fields.assignee.avatarUrls['24x24'])}"
+              src="${escapeAttr(fields.assignee.avatarUrls['24x24'])}"
               class="issue-assignee"
-              title="${escapeHtml(fields.assignee.displayName)}"
-              alt="${escapeHtml(fields.assignee.displayName)}"
+              title="${escapeAttr(fields.assignee.displayName)}"
+              alt="${escapeAttr(fields.assignee.displayName)}"
             />
           ` : '<span class="issue-unassigned" title="Unassigned">👤</span>'}
         </div>

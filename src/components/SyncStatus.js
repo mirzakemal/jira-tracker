@@ -131,7 +131,7 @@ export const SyncStatusStyles = `
     color: white;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     transition: all 0.2s ease;
     white-space: nowrap;
@@ -161,7 +161,7 @@ export const SyncStatusStyles = `
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     white-space: nowrap;
   }
@@ -181,7 +181,7 @@ export const SyncStatusStyles = `
     color: var(--primary, #6366f1);
     border: 1px solid var(--primary, #6366f1);
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
