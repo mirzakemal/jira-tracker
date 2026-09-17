@@ -4,19 +4,13 @@
  */
 
 export const ROUTES = {
-  BOARD: 'board',
-  ALL_ISSUES: 'all-issues',
-  ROADMAP: 'roadmap',
-  VELOCITY: 'velocity',
-  WORKLOAD: 'workload',
-  AGING: 'aging',
-  RELEASES: 'releases',
-  DASHBOARD: 'dashboard',
-  SETTINGS: 'settings',
-  CFD: 'cfd',
-  STANDUP: 'standup',
   PRODUCT: 'product',
-  CUSTOMERS: 'customers'
+  CUSTOMERS: 'customers',
+  STANDUP: 'standup',
+  RADAR: 'radar',
+  BUGS: 'bugs',
+  TRACE: 'trace',
+  SETTINGS: 'settings'
 };
 
 /**
@@ -26,7 +20,7 @@ export function parseRoute() {
   const hash = window.location.hash.slice(1); // Remove #
   const [path, queryString] = hash.split('?');
 
-  const route = path || ROUTES.BOARD;
+  const route = path || ROUTES.PRODUCT;
 
   // Parse query parameters — handle multi-value (array) params
   const params = {};
@@ -133,57 +127,4 @@ export function removeQueryParam(key) {
   const { route, params } = parseRoute();
   delete params[key];
   navigate(route, params);
-}
-
-/**
- * Convert filters to URL params
- */
-export function filtersToParams(filters) {
-  const params = {};
-
-  // Simple value filters
-  const simpleFilters = ['projectKey', 'boardId', 'sprintId', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'createdAfter', 'createdBefore', 'resolvedAfter', 'resolvedBefore', 'tagPresence', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
-  simpleFilters.forEach(key => {
-    if (filters[key]) {
-      params[key] = filters[key];
-    }
-  });
-
-  // Array filters - can be multiple values
-  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag', 'priority', 'sprintState'];
-  arrayFilters.forEach(key => {
-    if (filters[key] && Array.isArray(filters[key]) && filters[key].length > 0) {
-      params[key] = filters[key];
-    } else if (filters[key] && !Array.isArray(filters[key])) {
-      // Handle legacy single-value format
-      params[key] = filters[key];
-    }
-  });
-
-  return params;
-}
-
-/**
- * Convert URL params to filters
- */
-export function paramsToFilters(params) {
-  const filters = {};
-
-  // Simple value filters
-  const simpleFilters = ['projectKey', 'boardId', 'sprintId', 'searchQuery', 'updatedAfter', 'toBeTestedByDate', 'createdAfter', 'createdBefore', 'resolvedAfter', 'resolvedBefore', 'tagPresence', 'startDate', 'endDate', 'groupBy', 'zoomLevel'];
-  simpleFilters.forEach(key => {
-    if (params[key]) {
-      filters[key] = params[key];
-    }
-  });
-
-  // Array filters - can be multiple values
-  const arrayFilters = ['status', 'fixVersion', 'issueType', 'customer', 'product', 'assigneeId', 'reporterId', 'qaTesterId', 'codeReviewer1Id', 'codeReviewer2Id', 'tag', 'priority', 'sprintState'];
-  arrayFilters.forEach(key => {
-    if (params[key]) {
-      filters[key] = Array.isArray(params[key]) ? params[key] : [params[key]];
-    }
-  });
-
-  return filters;
 }

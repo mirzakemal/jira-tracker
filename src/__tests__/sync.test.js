@@ -16,6 +16,7 @@ function createMockClient() {
         { id: 100, key: 'TEST', name: 'Test Project', description: 'Test', lead: { accountId: 'lead1' } }
       ]
     }),
+    searchJql: vi.fn().mockResolvedValue({ issues: [], isLast: true }),
     getBoards: vi.fn().mockResolvedValue([
       { id: 1, name: 'Test Board', project: { key: 'TEST' }, type: 'scrum' }
     ]),
@@ -261,6 +262,7 @@ describe('Custom field detection through a real sync', () => {
       getFields: async () => FIELDS,
       getProjects: async () => ({ values: [{ id: '1', key: 'TSM2', name: 'TenderBoard Sprints' }] }),
       getBoards: async () => [{ id: 200, name: 'TSM2 board', type: 'scrum', project: { key: 'TSM2' } }],
+      searchJql: async () => ({ issues: [], isLast: true }),
       getSprints: async () => [],
       getBoardIssues: async (boardId, jql, startAt) => startAt > 0 ? { issues: [] } : {
         issues: [{

@@ -1,4 +1,4 @@
-# AGENTS.md — Jira Planner
+# AGENTS.md — ProductTVT
 
 Browser-based read-only Jira client. Vanilla JS, Vite, IndexedDB cache. No Jira writes ever.
 
@@ -19,16 +19,23 @@ Test env: jsdom + fake-indexeddb (polyfilled in `src/__tests__/setup.js`).
 
 ## Architecture
 
-- **`src/main.js`** (~1290 lines) — god file: routing, view switching, sync, DB init, UI rendering. Most bugs live here.
+- **`src/main.js`** (~700 lines) — app entry: the `VIEWS` registry (one entry per tab: route, title, icon, `create`, `load`, `reloadOnParams`), `mountView()`, the top bar, sync scheduling. Adding a view is one registry entry; there are no per-view `switchTo…` functions any more.
 - **`src/api/jira.js`** — `JiraClient` class, GET-only. Has 30s timeout via `AbortController`. Uses `btoa` for Basic auth (base64, not encryption).
-- **`src/db/indexeddb.js`** — IndexedDB wrapper. `DB_VERSION = 8`. Key stores: `issues` (keyPath: `key`), `tags` (autoIncrement), `metadata` (keyPath: `key`), `product_cards` / `doc_drafts` (keyPath `id`, autoIncrement).
+- **`src/db/indexeddb.js`** — IndexedDB wrapper. `DB_VERSION = 10`. Key stores: `issues` (keyPath: `key`), `tags` (autoIncrement), `metadata` (keyPath: `key`), `product_cards` / `doc_drafts` (keyPath `id`, autoIncrement).
 - **`src/db/sync.js`** — Fetches from Jira → caches locally. Errors are silently swallowed (logged only).
-- **`src/db/queries.js`** — All data queries + filter logic. Has its own filter cache (`invalidateFilterCache()` clears it).
+- **`src/db/queries.js`** — Shared plumbing only: `getIssueByKey`, local tags (`addTag`/`removeTag`/…), `getAllProjects`, `searchIssues` (Cmd+K), `getLatestChangelog`, `getIssueLinks`. View-specific queries live beside their views: `radar-queries.js`, `bug-queries.js`, `trace-queries.js`, `product-queries.js`. Each exports a pure `build…()` (tested on fixtures) and a `load…()` that reads the cache.
 - **`src/db/product-queries.js`** — Product Board CRUD (`product_cards`, `doc_drafts`), Eng-link detection, assigned-engineer resolution, milestone triggers. Kept separate from `queries.js` to stop that file growing further.
 - **`src/db/product-sync.js`** — Local reconciliation of the Product Board after a Jira sync. Makes NO network calls; called from `syncAll()`/`syncIncremental()` via `reconcileProductBoard()`.
 - **`src/utils/product-handoff.js`** — Builds the prefilled Jira create-issue URL + REST payload for a drafted card. No network calls, no writes.
 - **`src/components/CustomerDashboardView.js`** — Customer Card Dashboard: one full-width card per CUSTOMER CARD, sourced from the Customer Testing Board (TSM2 board 22), NOT from PDT. Epic links expand to show their child work items. Route `ROUTES.CUSTOMERS` (`#customers`). Read-only; every row is an anchor to Jira.
-- **`src/components/ProductBoardView.js`** — Product Board dashboard: Customer/Priority/Reporter filters, Action Required alerts, Kanban columns. Route `ROUTES.PRODUCT` (`#product`) — the app's LANDING view; an explicit `#board` still opens the Kanban board. Cards show a linked-issue count plus each link's status; opens the detail view via `openIssueDrawer(..., { centered: true })`.
+- **`src/components/ProductBoardView.js`** — Product Board dashboard: Customer/Priority/Reporter filters, Action Required alerts, Kanban columns. Route `ROUTES.PRODUCT` (`#product`) — the app's LANDING view; every unknown route (including the removed `#board`, `#roadmap`, …) redirects here. Cards show a linked-issue count plus each link's status and open Jira in a new tab.
+- **`src/components/ProductRadarView.js`** + **`db/radar-queries.js`** — Product Radar: decisions waiting (PDT in Plan/Feedback/Validation), High/Highest open >30d, rework (Test Comments / Test Run Failed), inflow vs outflow per team area over 90d, customers with urgent work. Route `#radar`. Triage chips store `triage:reviewed|decision|parked` tags locally.
+- **`src/components/BugPatternsView.js`** + **`db/bug-queries.js`** — Bug Pattern Explorer: product areas from `utils/product-area.js`, monthly trend, Bug:Defect escape ratio, bounce-backs, recurring phrases. Route `#bugs`. `SORT_OPTIONS` carries the on-screen explanation of each sort.
+- **`src/components/TraceabilityView.js`** + **`db/trace-queries.js`** — Traceability Gaps: PDT without engineering work, TSM2 without a product parent, TTS tickets linked / mentioned-only / unconnected. Route `#trace`. `utils/mentions.js` finds keys cited in titles.
+- **`src/utils/completion.js`** — `isCompleted()` / `completedAt()`: status CATEGORY, dated by `resolved_at` else `updated_at`. See gotcha below.
+- **`src/utils/team-area.js`**, **`utils/parked.js`** — the two inferred classifications the Radar rests on; both are rule tables meant to be tuned.
+- **`src/db/sync-progress.js`** — per-mode sync checkpoints (unit done-lists plus a page offset or token cursor). Why an interrupted sync resumes instead of restarting.
+- **`src/utils/nav-icons.js`** — inline SVG for the tab bar, `currentColor` so the active tab tints.
 - **`src/api/confluence.js`** — `ConfluenceClient`, GET-only, mirrors `JiraClient`. `publishDraft()` deliberately throws.
 - **`src/product-config.js`** — Dual-board config: board IDs, eng link types, product statuses.
 - **`src/utils/storage.js`** — AES-GCM encrypted credentials in localStorage. Falls back to plaintext migration path on load.
@@ -43,12 +50,11 @@ Test env: jsdom + fake-indexeddb (polyfilled in `src/__tests__/setup.js`).
 they no longer do.) Adding a store still means bumping `DB_VERSION` so
 `onupgradeneeded` fires for existing users.
 
-### `getIssueLinks`/`getDependencyChain` close the shared connection
-Both call `db.close()` on the **singleton** `dbInstance` when you don't pass
-`options.db`, while `indexeddb.js` keeps caching the now-closed handle — every
-later IndexedDB call then fails with `InvalidStateError`. Always pass
-`{ db: getDatabase() }`. `product-queries.js` does this; `DependencyGraphView`
-does not (known bug).
+### `getIssueLinks` used to close the shared connection
+It called `db.close()` on the singleton `dbInstance` while `indexeddb.js` kept caching the
+now-dead handle, so every later IndexedDB call threw `InvalidStateError` until a reload.
+The close is gone (see the NOTE in `getIssueLinks`, with regression tests in `queries.test.js`). `indexeddb.js` owns that
+lifecycle: never close what you did not open. Prefer `getByIndex` for new link reads.
 
 ### The two projects: PDT (product) and TSM2 (engineering)
 `PRODUCT_PROJECT_KEY` = `PDT` (Product Development Team, id 10085).
@@ -67,18 +73,20 @@ types like "Relates" are used for both delivery links and plain cross-references
 explicit custom field bypasses the check. `link_source` records which strategy
 matched; all links are listed in `linked_issue_keys` for display regardless.
 
-### BoardSelector's auto-selection can hijack the landing view
-`BoardSelector.load()` fires `handleSelectionChange()` while auto-selecting a project
-on startup. That callback shows the board selector and `navigate(ROUTES.BOARD)`, so
-without a guard it drags any non-board landing view back to `#board` mid-load. It now
-returns early unless `state.currentView` is `board`/`all-issues`.
+### Unknown routes redirect to the Product Board
+`handleRouteChange()` resolves the route with `resolveInitialView()`; if the hash is not one
+of the six current routes it calls `navigate(ROUTES.PRODUCT)` and returns. Bookmarks to the
+ten removed views (`#board`, `#all-issues`, `#roadmap`, `#velocity`, `#workload`, `#aging`,
+`#releases`, `#dashboard`, `#cfd`, `deps`) therefore land somewhere useful instead of on a
+blank screen. Their code is deleted, not hidden — do not resurrect a view by re-adding a
+route without its component.
 
 ### Landing-view logic lives in `utils/initial-view.js`
 `main.js` touches the DOM at import time, so it cannot be imported from a test — which
 is how a `params is not defined` ReferenceError in `renderConnected()` shipped and hung
-the Product Board on its spinner. `resolveInitialView()`, `ROUTE_FOR_VIEW` and
-`productFiltersFromParams()` live in a separate module so they are unit tested. Put new
-routing logic there, not inline in `main.js`.
+the Product Board on its spinner. `resolveInitialView(route)`, `ROUTE_FOR_VIEW` and the
+per-view `…FiltersFromParams()` helpers live in a separate module so they are unit tested.
+Params never change the landing view any more — only the route does.
 
 ### Issue links are replaced PER ISSUE, never globally
 `syncIncremental()` must not `clear(STORES.ISSUELINKS)`: it only refetches issues
@@ -194,7 +202,7 @@ row wrapped its key, status chip and assignee onto separate lines.
 `renderControls()` emits `.product-filters` / `.product-filter` — the same classes as the
 Product Board, injected globally from `ProductBoardViewStyles` — so every view's filter
 bar looks and behaves alike. Prev/Next sits at the end of the same bar. There is no Exit
-button; navigation is the sidebar.
+button; navigation is the icon tab bar at the top.
 
 ### Card actions replaced the Action Required banner
 The board-level banner is gone; prompts render on the card they refer to
@@ -213,11 +221,11 @@ Confluence; setting it pins the space.
 Clicking a product card or a standup card opens `/browse/{key}` in a new tab. Standup
 cards are real anchors (no interactive children, so ctrl/middle-click and keyboard work
 for free); product cards use a delegated handler because they contain buttons and a
-select, with the issue key additionally rendered as an anchor. `IssueDetailDrawer` is no
-longer reached from the Product Board, but it is NOT dead: ten components still open it
-(Kanban board via IssueCard, All Issues, Roadmap, Workload, Aging, Releases, Dashboard,
-ChangelogDrawer, QuickSearchPalette, KeyboardShortcuts). Its centred variant was removed
-once nothing used it; the side drawer stays.
+select, with the issue key additionally rendered as an anchor. The Radar, Bug Patterns and
+Traceability rows are anchors too (`target="_blank" rel="noopener"`); Radar rows keep their
+triage buttons OUTSIDE the anchor, because interactive content inside `<a>` is invalid.
+`IssueDetailDrawer` is still reached from ChangelogDrawer, QuickSearchPalette and the `o`
+keyboard shortcut, so it stays.
 
 ### Link rows snapshot the issue at the far end
 Jira embeds the linked issue's summary/status/issuetype inside each issuelink, so sync
@@ -228,12 +236,12 @@ shows its type and status instead of reading "Not synced" — which is what an u
 epic used to look like. Only rows whose `source_key` IS the issue being queried carry a
 usable snapshot: a row written from the far side describes the other issue.
 
-### Explicit routes beat the filter-param heuristic
-`resolveInitialView()` matches the route FIRST. Several views share param names with the
-issue filters — the Product Board and Customer Dashboard both use `customer` — so
-testing params first sent `#product?customer=NTUC` and `#customers?customer=NTUC` to All
-Issues. The param heuristic now only applies when no recognised route is present, for
-legacy `?allIssues=true` style links.
+### Routes decide the view; params only filter it
+The old All Issues heuristic ("a `customer` param means All Issues") is gone with that view.
+`resolveInitialView()` looks at the route alone. Each view reads its own params in `load()`
+— Product Board `customer/priority/reporter/search`, Radar `area/parked`, Bug Patterns
+`sort/team/sel`, Traceability `tab/bugs/parked` — and writes them back with
+`updateQueryParams()` so the address bar is the saved state.
 
 ### Uncached epics are hydrated on demand
 `sync.js` walks BOARDS, so an epic sitting on no board — and its children — is absent
@@ -351,17 +359,58 @@ Rule of thumb:
 
 Audit with `grep -rn '="[^"]*\${escapeHtml' src/components/` — it should return nothing.
 
-### Board/Sprint IDs are strings from `<select>`, numbers in IndexedDB
-Always coerce: `Number(val)`. Mismatch causes 0-result queries.
-
 ### Container ID must exist in loading state
 Component `render()` returns `<div id="my-view">` wrapper. Loading spinners must also be inside this wrapper or `refresh()` can't find the container after async load → endless spinner.
 
 ### `getAll(ISSUES)` performance
-`queries.js` calls `getAll('issues')` ~11 times for filter option generation. With large datasets this is slow. Consider caching or using indexes.
+The three PM views each do ONE `getAll('issues')` per load and compute everything in memory
+— fine at ~7,500 issues. What must never come back is a `getAll` inside a per-page loop:
+`upsertIssues()` used to read the whole store once per page of every sprint, which is what
+stalled production syncs. Use `getMany(store, keys)` for a batch, `count(store)` for a number.
 
-### Numeric filter fields are strings in URL params
-`paramsToFilters()` returns strings. IndexedDB stores numbers. Query functions must handle both.
+### URL params are strings; coerce in the view
+`parseRoute()` returns strings (or arrays when a param repeats). Views coerce as they read:
+`parked === '1'`, `first(params.customer)`. The old shared `paramsToFilters()` vocabulary was
+removed with All Issues; do not reintroduce a global filter vocabulary.
+
+### Completion is derived from status CATEGORY, never from `resolved_at`
+TSM2's workflow never sets a Jira resolution: 5,627 of 5,628 Done-category issues have
+none, so `resolutiondate`/`resolved_at` is null project-wide. Anything computed from it reads
+zero — which is how the old throughput, cycle-time, CFD and burndown views showed nothing
+for months. Use `isCompleted()` / `completedAt()` / `completedWithin()` from
+`utils/completion.js`; the date falls back to `updated_at`, and says so.
+
+### Parked work is excluded by RULE, then by hand
+"Untouched for a long time" is not neglect — much of it is deliberate. `utils/parked.js`
+detects the conventions actually in use: customer field `Archived`, or a title starting with
+`[Archived]` `[KIV]` `[On Hold]` `[WIP]` `[Duplicated]` (leading bracket tags only; `[RAW]`
+and `[Gateway]` are not parking). A PM can also park anything with the ⏸ chip, stored as a
+`triage:parked` tag. Every "needs attention" list filters both by default and reports how
+many it hid.
+
+### Team area (Project / Integration / Core) is INFERRED
+Nobody records it in Jira. `utils/team-area.js` decides by whole-word title keywords
+(Integration), then issue type / customer=internal (Core), else Project. It will misfire
+— "Sync with line item field" reads as Integration — so treat the tables as tunable, and if
+the team ever records the area in a field, replace the rules with a lookup.
+
+### Product area (bug dictionary) is a PRIORITY-ORDERED list
+`utils/product-area.js` returns the FIRST matching area, so order encodes specificity
+(Gateway before Invoicing, catch-alls last). Patterns are whole-word where a substring would
+lie (`\btenders?\b`, because "tenderboard_inbound_log" is not sourcing). The explorer's
+"phrases not named yet" panel is the tuning input; bracketed words are kept for exactly that.
+
+### TTS has no agile board, so it is synced by JQL
+The board sweep never reaches a Jira "business" project. `EXTRA_SYNC_PROJECTS` (default
+`TTS`) is fetched with `client.searchJql('project = KEY')` — `/rest/api/3/search/jql`, paged
+by `nextPageToken`, checkpointed per project. Mock clients in tests need a `searchJql` stub or
+the step logs a warning.
+
+### Sync checkpoints are per MODE
+`sync_progress_full` and `sync_progress_incremental` are separate keys. A single key let the
+5-minute background incremental sync overwrite an interrupted full sync's progress — and an
+incremental run can never fill the gaps a full run left. `syncIncremental` clears only its
+own key; `syncAll` clears both.
 
 ## Read-Only Rule — Hard Constraint
 
@@ -380,14 +429,18 @@ Component `render()` returns `<div id="my-view">` wrapper. Loading spinners must
 
 ## Adding a New View
 
-1. Add route constant to `src/utils/router.js` (`ROUTES.MYVIEW`)
-2. Add nav button to sidebar in `renderConnected()` in `main.js`
-3. Add click handler in the `viewSwitchMap` object in `renderConnected()`
-4. Add `switchToMyView()` function in `main.js`
-5. Add route case in `handleRouteChange()` in `main.js`
-6. Import component + styles in `main.js`, inject styles in `addGlobalStyles()`
+1. Add the route constant to `src/utils/router.js` (`ROUTES.MYVIEW`) and its mapping in
+   `BY_ROUTE` in `src/utils/initial-view.js`.
+2. Add an icon to `src/utils/nav-icons.js` (24×24, stroke-only, `currentColor`).
+3. Add one entry to `VIEWS` in `src/main.js`: `{ route, title, icon, create, load, reloadOnParams }`.
+   The tab, click handling, mounting, URL normalisation and active state all follow from it.
+4. Import the component and append `${MyViewStyles || ''}` in `addGlobalStyles()`.
+5. Optionally add a `g`+key in `GOTO_MAP` / `SHORTCUTS` in `KeyboardShortcuts.js`.
+6. Add the route to the `initial-view.test.js` round-trip test.
 
-Pattern: every view switch does `cleanupCurrentView()` → hide board selector → create new instance → render into `#issue-board-container`.
+Pattern: `mountView()` does `cleanupCurrentView()` → `ensureDatabase()` → `create()` → render
+into `#view-container` → `load(view, params)`. A hashchange on an already-mounted view calls
+`load()` again only when `reloadOnParams` is true AND `view.isLoading` is false.
 
 ## Component Pattern
 
@@ -396,8 +449,10 @@ import { escapeHtml } from '../utils/html.js';
 import { formatDate } from '../utils/date.js';
 
 export class MyComponent {
-  constructor(client, jiraDomain, onBack) { ... }
-  async load() {
+  constructor(client, jiraDomain) { ... }
+  get filters() { return { /* what load() accepts; the app passes it back on refresh */ }; }
+  destroy() { this._destroyed = true; }
+  async load(filters = {}) {
     this.isLoading = true;
     this.refresh();
     try { /* fetch */ this.isLoading = false; this.refresh(); }
@@ -417,13 +472,16 @@ export class MyComponent {
 export const MyComponentStyles = `...`;
 ```
 
-Key: `#my-view` ID must be in both loading and loaded HTML.
+Key: `#my-view` ID must be in both loading and loaded HTML. `isLoading` is read by the router to
+skip a redundant reload; `destroy()` must make a late `load()` a no-op (check a flag after every await).
 
 ## Dead Code (do not extend)
 
-- `src/components/TagsManager.js` — only `TagsManagerStyles` is exported and used
-- (`CreateIssueModal.js`, the `TagsManager`/`TagsFilter` classes and the unused
-  `idb` dependency have since been removed)
+Nothing known at the moment. The 2026-09 prune deleted the Board, All Issues, Roadmap,
+Dashboard, Velocity, Team, Aging, Releases, Flow and Dependency views with their helpers
+(`BoardSelector`, `IssueBoard`, `IssueCard`, `TableView`, `FilterPanel`, `SavedViewsMenu`,
+`TagsManager`, `BackButton`) and ~40 query functions. If something is unused, delete it —
+do not leave it hidden.
 
 ## Production
 

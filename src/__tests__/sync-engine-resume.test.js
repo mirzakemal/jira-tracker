@@ -51,7 +51,9 @@ function makeClient({ failOnSprint = null } = {}) {
       }
       return Promise.resolve({ issues: issuesFor(sprintId) });
     }),
-    getIssue: vi.fn().mockResolvedValue({ fields: { issuelinks: [] } })
+    getIssue: vi.fn().mockResolvedValue({ fields: { issuelinks: [] } }),
+    // Board-less projects (TTS) are fetched by JQL; nothing to return here.
+    searchJql: vi.fn().mockResolvedValue({ issues: [], isLast: true })
   };
 }
 

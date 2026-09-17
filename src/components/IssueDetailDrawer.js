@@ -72,7 +72,6 @@ export class IssueDetailDrawer {
           </div>
           <div class="drawer-actions">
             <a href="${jiraUrl}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">Open in Jira</a>
-            <button class="btn btn-secondary btn-sm" id="dep-graph-btn" data-issue="${escapeAttr(i.key)}" data-summary="${escapeAttr(i.summary || '')}" aria-label="Show dependencies">Dependencies</button>
             <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
           </div>
         </div>
@@ -338,15 +337,6 @@ export class IssueDetailDrawer {
           openIssueDrawer(key, this.jiraDomain, this.onClose);
         }
       });
-    });
-
-    document.getElementById('dep-graph-btn')?.addEventListener('click', () => {
-      const key = document.getElementById('dep-graph-btn')?.dataset.issue;
-      const summary = document.getElementById('dep-graph-btn')?.dataset.summary;
-      if (key) {
-        const encodedSummary = encodeURIComponent(summary || '');
-        window.navigate('deps', { issueKey: key, summary: encodedSummary });
-      }
     });
   }
 

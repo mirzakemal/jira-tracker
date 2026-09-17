@@ -58,6 +58,19 @@ export const ENG_LINK_TYPES = [
   'relates'
 ];
 
+/**
+ * Projects to sync by JQL because the board sweep cannot reach them.
+ *
+ * The sync walks agile boards, and a Jira "business" project (TTS — Tenderboard
+ * Internal Tickets) has none, so its issues were never cached. Each key here
+ * is fetched with `project = KEY` through the search API instead. Comma-
+ * separated in the env var.
+ */
+export const EXTRA_SYNC_PROJECTS = (import.meta.env?.VITE_EXTRA_SYNC_PROJECTS || 'TTS')
+  .split(',')
+  .map(k => k.trim())
+  .filter(Boolean);
+
 /** Custom field IDs specific to the Product board. */
 export const PRODUCT_CUSTOM_FIELDS = {
   // Jira custom field holding the user persona. Set to your instance's field ID.

@@ -1,5 +1,5 @@
 /**
- * Shared reusable CSS style fragments for Jira Planner components.
+ * Shared reusable CSS style fragments for ProductTVT components.
  *
  * These patterns are duplicated across multiple component style blocks.
  * Import them in main.js and inject once via the global style tag
@@ -102,10 +102,7 @@ export const loadingContainerStyles = `
 `
 
 export const emptyStateStyles = `
-  .empty-state,
-  .table-view-empty,
-  .roadmap-empty,
-  .saved-views-empty {
+  .empty-state {
     text-align: center;
     padding: 72px 24px;
     color: var(--text-muted);
@@ -118,9 +115,7 @@ export const emptyStateStyles = `
     color: var(--text);
   }
 
-  .empty-state .empty-hint,
-  .table-view-empty .empty-hint,
-  .roadmap-empty .empty-hint {
+  .empty-state .empty-hint {
     font-size: 15px;
     margin-top: 8px;
     opacity: 0.85;
@@ -562,11 +557,7 @@ export const panelBaseStyles = `
      own border and background. That padding, not the bar's own, was what made
      the header tall. */
   .panel,
-  .settings-panel,
-  .board-selector,
-  .roadmap-toolbar,
-  .table-view,
-  .roadmap-timeline {
+  .settings-panel {
     background: var(--surface);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-lg);
@@ -574,8 +565,7 @@ export const panelBaseStyles = `
     padding: 16px;
   }
 
-  .settings-panel,
-  .board-selector {
+  .settings-panel {
     background: var(--surface);
     border-color: var(--border);
     margin-bottom: 20px;
@@ -604,17 +594,7 @@ export const panelBaseStyles = `
     border-radius: var(--radius-xl);
   }
 
-  .board-selector {
-    padding: 14px 18px;
-  }
 
-  .roadmap-toolbar {
-    margin-bottom: 16px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    align-items: flex-end;
-  }
 
   .sync-status {
     display: flex;

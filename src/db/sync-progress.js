@@ -157,9 +157,22 @@ export function resumeOffset(run, unit) {
  * @param {string} unit
  * @param {number} startAt
  */
-export async function setCursor(run, unit, startAt) {
-  run.cursor = { unit, startAt };
+export async function setCursor(run, unit, startAt, token = null) {
+  // `token` carries the opaque nextPageToken of the JQL search API, which
+  // pages by token rather than offset. Either field may be used to resume.
+  run.cursor = { unit, startAt, token };
   await persist(run);
+}
+
+/**
+ * Opaque page token to resume a JQL-paged unit from, or null.
+ *
+ * @param {object} run
+ * @param {string} unit
+ * @returns {string|null}
+ */
+export function resumeToken(run, unit) {
+  return run.cursor?.unit === unit ? (run.cursor.token || null) : null;
 }
 
 /**

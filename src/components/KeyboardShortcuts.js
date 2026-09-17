@@ -9,19 +9,17 @@ const SHORTCUTS = [
   { keys: 'j / k', desc: 'Next / previous issue' },
   { keys: 'o / Enter', desc: 'Open selected issue' },
   { keys: 'Esc', desc: 'Close overlay / drawer' },
-  { keys: 'g b', desc: 'Go to Board' },
-  { keys: 'g a', desc: 'Go to All Issues' },
-  { keys: 'g r', desc: 'Go to Roadmap' },
-  { keys: 'g d', desc: 'Go to Dashboard' },
-  { keys: 'g v', desc: 'Go to Velocity' },
-  { keys: 'g w', desc: 'Go to Workload' },
-  { keys: 'g f', desc: 'Go to CFD' },
+  { keys: 'g p', desc: 'Go to Product Board' },
+  { keys: 'g c', desc: 'Go to Customer Card Dashboard' },
+  { keys: 'g r', desc: 'Go to Product Radar' },
+  { keys: 'g b', desc: 'Go to Bug Patterns' },
+  { keys: 'g t', desc: 'Go to Traceability' },
   { keys: 'g s', desc: 'Go to Standup' },
 ];
 
 const GOTO_MAP = {
-  b: 'board', a: 'all-issues', r: 'roadmap', d: 'dashboard',
-  v: 'velocity', w: 'workload', f: 'cfd', s: 'standup'
+  p: 'product', c: 'customers', s: 'standup',
+  r: 'radar', b: 'bugs', t: 'trace'
 };
 
 function showOverlay() {
