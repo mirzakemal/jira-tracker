@@ -1,5 +1,5 @@
 /**
- * Jira Planner Service Worker
+ * ProductTVT Service Worker
  * Stale-while-revalidate for the app shell. API requests are NOT intercepted:
  * the app's offline story is its IndexedDB cache, not this worker.
  */
@@ -118,7 +118,7 @@ async function staleWhileRevalidate(request) {
     `<!DOCTYPE html>
     <html lang="en">
     <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jira Planner - Offline</title>
+    <title>ProductTVT - Offline</title>
     <style>
       body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #1a1a2e; color: #e0e0e0; }
       .container { text-align: center; padding: 40px; }
@@ -128,7 +128,7 @@ async function staleWhileRevalidate(request) {
     </style></head>
     <body>
       <div class="container">
-        <h1>📋 Jira Planner</h1>
+        <h1>ProductTVT</h1>
         <p>You're offline. Connect to the internet to load the app.</p>
         <button class="retry" onclick="location.reload()">Retry</button>
       </div>

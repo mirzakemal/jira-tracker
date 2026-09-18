@@ -302,20 +302,30 @@ class JiraClient {
   }
 
   /**
-   * Search issues using JQL
+   * Search issues by JQL, one page at a time.
+   *
+   * Uses /rest/api/3/search/jql, which pages with an opaque `nextPageToken`
+   * rather than startAt — Atlassian retired the offset-based /search. The
+   * caller loops until the response carries no token.
+   *
+   * Exists so projects without an agile board (TTS is a "business" project)
+   * can still be cached; the board sweep never sees them.
+   *
+   * @param {string} jql
+   * @param {object} [options]
+   * @param {string[]} [options.fields]
+   * @param {number} [options.maxResults=100]
+   * @param {string|null} [options.nextPageToken]
+   * @returns {Promise<{issues: object[], nextPageToken?: string, isLast?: boolean}>}
    */
-  async searchIssues(jql, fields = null, startAt = 0, maxResults = 100) {
-    const body = {
+  async searchJql(jql, { fields = ['*navigable', 'issuelinks'], maxResults = 100, nextPageToken = null } = {}) {
+    const params = new URLSearchParams({
       jql,
-      startAt,
-      maxResults,
-      fields: fields || ['summary', 'status', 'priority', 'assignee', 'issuetype', 'created', 'updated']
-    };
-
-    return await this.request('/rest/api/3/search', {
-      method: 'POST',
-      body: JSON.stringify(body)
+      maxResults: String(maxResults),
+      fields: fields.join(',')
     });
+    if (nextPageToken) params.set('nextPageToken', nextPageToken);
+    return await this.request(`/rest/api/3/search/jql?${params}`);
   }
 
   /**

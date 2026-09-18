@@ -23,13 +23,14 @@ import {
   markDone,
   setCursor,
   resumeOffset,
+  resumeToken,
   clearProgress,
   pendingRun
 } from './sync-progress.js';
 
 import { CUSTOM_FIELDS } from '../jira-config.js';
 import { resolveCustomFieldIds, defaultCustomFieldIds } from './field-resolver.js';
-import { PRODUCT_PROJECT_KEY } from '../product-config.js';
+import { PRODUCT_PROJECT_KEY, EXTRA_SYNC_PROJECTS } from '../product-config.js';
 import { syncProductBoard } from './product-sync.js';
 
 /**
@@ -60,6 +61,7 @@ export async function syncAll(client) {
     await syncProjects(client);
     await syncAllBoards(client);
     await syncAllSprints(client, warnings, run);
+    await syncExtraProjects(client, warnings, run);
 
     // syncAllBoards() walks every accessible board, so both the Product and
     // Engineering boards are already cached by this point. Refresh the product
@@ -113,6 +115,7 @@ export async function syncIncremental(client) {
     await syncProjects(client);
     await syncAllBoards(client);
     await syncUpdatedIssues(client, run.sinceTimestamp, warnings, run);
+    await syncExtraProjects(client, warnings, run, run.sinceTimestamp);
 
     await syncProductIssueLinks(client, warnings);
     const productBoard = await reconcileProductBoard(warnings);
@@ -315,6 +318,76 @@ async function syncAllBoards(client) {
 }
 
 /**
+ * ISO timestamp → the "yyyy-MM-dd HH:mm" form JQL accepts.
+ *
+ * Local time on purpose: JQL interprets bare datetimes in the requesting
+ * user's Jira timezone, and the browser's local clock is the closest thing
+ * we have to that.
+ *
+ * @param {string} iso
+ * @returns {string}
+ */
+function toJiraDateTime(iso) {
+  const date = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * Sync projects the board sweep cannot reach.
+ *
+ * TTS is a Jira "business" project with no agile board, so walking boards
+ * never touched it and its 524 issues were simply absent from the cache.
+ * Each configured project is fetched with a plain `project = KEY` search
+ * instead. Paged by nextPageToken and checkpointed per project, so an
+ * interrupted run resumes at the page it stopped on.
+ *
+ * Failures are per project and non-fatal, matching the rest of the sync.
+ *
+ * @param {object} client
+ * @param {string[]} warnings - mutated in place
+ * @param {object} [run] - checkpoint from sync-progress.js
+ * @param {string|null} [sinceTimestamp] - incremental window; null = everything
+ */
+async function syncExtraProjects(client, warnings, run, sinceTimestamp = null) {
+  for (const key of EXTRA_SYNC_PROJECTS) {
+    const unit = `project:${key}`;
+    if (run && isDone(run, unit)) {
+      logger.debug(`[Sync] Skipping ${unit} (already synced this run)`);
+      continue;
+    }
+
+    try {
+      let jql = `project = ${key}`;
+      if (sinceTimestamp) jql += ` AND updated >= "${toJiraDateTime(sinceTimestamp)}"`;
+
+      let token = run ? resumeToken(run, unit) : null;
+      let total = 0;
+
+      // Hard page ceiling guards against a malformed response looping forever.
+      for (let page = 0; page < 500; page += 1) {
+        const result = await client.searchJql(jql, { nextPageToken: token });
+        const issues = result?.issues || [];
+        if (issues.length > 0) {
+          await upsertIssues(issues, null, null);
+          total += issues.length;
+        }
+
+        token = result?.nextPageToken || null;
+        if (!token || result?.isLast === true || issues.length === 0) break;
+        if (run) await setCursor(run, unit, 0, token);
+      }
+
+      if (run) await markDone(run, unit);
+      logger.info(`[Sync] Synced ${total} issues for project ${key} by JQL`);
+    } catch (error) {
+      logger.error(`[Sync] Failed to sync project ${key}:`, error);
+      warnings.push(`Failed to sync project ${key}: ${error.message}`);
+    }
+  }
+}
+
+/**
  * Sync all sprints from all boards
  */
 async function syncAllSprints(client, warnings, run) {
@@ -472,18 +545,9 @@ async function syncUpdatedIssues(client, sinceTimestamp, warnings, run) {
     }
 
     try {
-      let jql = `updated >= -30d`;
-      if (sinceTimestamp) {
-        // Convert ISO timestamp to Jira format: yyyy-MM-dd HH:mm
-        const date = new Date(sinceTimestamp);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const jiraDate = `${year}-${month}-${day} ${hours}:${minutes}`;
-        jql = `updated >= "${jiraDate}"`;
-      }
+      const jql = sinceTimestamp
+        ? `updated >= "${toJiraDateTime(sinceTimestamp)}"`
+        : 'updated >= -30d';
 
       let startAt = run ? resumeOffset(run, unit) : 0;
       const maxResults = 100;

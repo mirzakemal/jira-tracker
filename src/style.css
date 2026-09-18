@@ -1,5 +1,5 @@
 /* ===========================
-   Jira Planner — Modern Design System
+   ProductTVT — Modern Design System
    Refined: elegant typography, layered shadows, refined palette, smoother motion
    =========================== */
 
@@ -58,9 +58,6 @@
      so the two borders meet in a straight line across the top of the app. */
   --header-h: 54px;
 
-  /* Width of the sidebar when it is reduced to an icon rail — both when
-     collapsed by the user and when the viewport forces it. */
-  --rail-w: 48px;
   --space-3xl: 32px;
   --space-4xl: 48px;
 
@@ -264,202 +261,113 @@ a { color: var(--primary); }
 }
 
 /* ════════════════════════════════════
-   Layout — Sidebar + Main
+   Layout — Top bar + content
    ════════════════════════════════════ */
 
-.app-container {
-  display: flex;
-  height: 100svh;
-  overflow: hidden;
-}
-
-/* ── Sidebar ── */
-.app-sidebar {
-  /* Sits to the RIGHT of the main content. `order` rather than
-     `flex-direction: row-reverse` on the container, so the DOM order (and
-     with it tab order and screen-reader order) is untouched and no other
-     child of .app-container is affected. */
-  order: 2;
-  width: 232px;
-  min-width: 232px;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
+/* Connected app: a bar on top, the view below. Nothing else. */
+.app-shell {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
-  transition: width var(--dur) var(--ease-out), min-width var(--dur) var(--ease-out);
-  z-index: 100;
+  height: 100svh;
+  overflow: hidden;
+  background: var(--bg);
 }
 
-/* ── Collapsed rail ──
-   Narrower than the old 60px, and the inner padding drops with it so the
-   icons sit close to the screen edge instead of floating in the middle of a
-   wide gutter. Everything below is scoped to .collapsed, so the expanded
-   sidebar keeps its roomier spacing. */
-.app-sidebar.collapsed { width: var(--rail-w); min-width: var(--rail-w); }
-
-.collapsed .sidebar-nav { padding: var(--space-sm) var(--space-xs); }
-.collapsed .sidebar-footer { padding: var(--space-xs); }
-
-/* No label to sit beside, so the icon centres in the rail rather than being
-   pushed off-centre by left-aligned padding and a now-empty gap. */
-.collapsed .sidebar-brand,
-.collapsed .nav-item,
-.collapsed .sidebar-collapse-btn {
-  justify-content: center;
-  gap: 0;
-  padding-left: 0;
-  padding-right: 0;
-}
-
-/* The active accent sits 9px outside the nav item, which the narrower padding
-   would clip to a 1–2px sliver. Hidden outright in the rail — the background
-   pill and the tinted icon already carry the active state. */
-.collapsed .nav-item::before { display: none; }
-
-.sidebar-brand {
+/* Disconnected (connection form): a simple centred column. */
+.app-container {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-2xl);
+  min-height: 100svh;
+}
+
+/* ── Brand ── */
+.brand {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-md);
-  /* Block padding comes from the shared header height instead of a fixed
-     16px, which left this row 19px taller than the bar beside it. */
-  min-height: var(--header-h);
-  padding: 0 var(--space-lg);
-  border-bottom: 1px solid var(--border-light);
-  user-select: none;
-  flex-shrink: 0;
-}
-
-.sidebar-brand-icon {
-  font-size: 25.5px;
-  flex-shrink: 0;
-  filter: drop-shadow(0 1px 2px rgba(91, 95, 238, 0.25));
-}
-
-.sidebar-brand-text {
-  font-size: 18.5px;
+  gap: var(--space-sm);
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--text-h);
   letter-spacing: -0.015em;
   white-space: nowrap;
-  overflow: hidden;
-  transition: opacity var(--dur-fast) var(--ease-out);
+  user-select: none;
 }
+.brand-icon { display: inline-grid; place-items: center; width: 22px; height: 22px; color: var(--primary); }
+.brand-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.app-title .brand-icon { width: 26px; height: 26px; margin-right: 8px; vertical-align: -5px; }
+.app-title .brand-icon svg { width: 26px; height: 26px; }
 
-.collapsed .sidebar-brand-text { opacity: 0; width: 0; }
-
-.sidebar-nav {
-  flex: 1;
-  padding: var(--space-md) var(--space-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.nav-section { margin-bottom: var(--space-md); }
-
-.nav-section-title {
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--text-muted);
-  padding: var(--space-md) var(--space-sm) var(--space-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-
-.collapsed .nav-section-title { opacity: 0; height: 0; padding: 0; margin: 0; overflow: hidden; }
-
-.nav-item {
-  display: flex;
+/* ── Tab bar: one icon per view, label in a tooltip ── */
+.tab-bar {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-md);
-  padding: 8px 10px;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 15.5px;
-  font-weight: 500;
-  color: var(--text);
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-  white-space: nowrap;
+}
+
+.tab-btn,
+.icon-btn {
   position: relative;
-}
-
-.nav-item::before {
-  content: '';
-  position: absolute;
-  left: -9px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  background: var(--primary);
-  border-radius: 0 var(--radius-full) var(--radius-full) 0;
-  opacity: 0;
-  transform: scaleY(0.4);
-  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
-}
-
-.nav-item:hover { background: var(--hover); color: var(--text-h); }
-.nav-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
-.nav-item.active::before { opacity: 1; transform: scaleY(1); }
-
-.nav-item-icon {
-  font-size: 17px;
-  flex-shrink: 0;
-  width: 22px;
-  text-align: center;
-  opacity: 0.9;
-}
-
-.nav-item.active .nav-item-icon { opacity: 1; }
-
-.nav-item-label {
-  overflow: hidden;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-
-.collapsed .nav-item-label { opacity: 0; width: 0; }
-.collapsed .nav-item { justify-content: center; padding: 9px 0; }
-.collapsed .nav-item::before { display: none; }
-
-.sidebar-footer {
-  padding: var(--space-sm);
-  border-top: 1px solid var(--border-light);
-}
-
-.sidebar-collapse-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: 8px 10px;
-  border: none;
+  appearance: none;
+  border: 0;
   background: none;
   color: var(--text-muted);
+  width: 36px;
+  height: 30px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  font-size: 15px;
-  border-radius: var(--radius-md);
-  width: 100%;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-
-.sidebar-collapse-btn:hover { background: var(--hover); color: var(--text-h); }
-
-/* ── Main Content Area ── */
-.app-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-  background: var(--bg);
+.tab-btn svg,
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
+.tab-btn:hover,
+.icon-btn:hover { background: var(--hover); color: var(--text-h); }
+.tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-xs); }
+.tab-btn:focus-visible,
+.icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* Tooltip from aria-label — immediate, styled, and the same text a screen
+   reader gets. Native `title` is deliberately not used alongside it, which
+   would show two tooltips. */
+.tab-btn::after,
+.icon-btn::after {
+  content: attr(aria-label);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--text-h);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  z-index: 50;
+}
+.tab-btn:hover::after,
+.tab-btn:focus-visible::after,
+.icon-btn:hover::after,
+.icon-btn:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .top-bar {
   display: flex;
@@ -893,29 +801,8 @@ a { color: var(--primary); }
 @media (max-width: 768px) {
   .app-container { padding: 0; }
 
-  /* Narrow viewports get the rail whether or not the user collapsed it. This
-     block also has to repeat the rail treatment, because the rules above are
-     scoped to .collapsed, which the viewport does not add — without it the
-     labels were rendered and then clipped mid-word by overflow-x: hidden. */
-  .app-sidebar {
-    width: var(--rail-w);
-    min-width: var(--rail-w);
-  }
-
-  .app-sidebar .sidebar-nav { padding: var(--space-sm) var(--space-xs); }
-  .app-sidebar .sidebar-footer { padding: var(--space-xs); }
-  .app-sidebar .sidebar-brand-text,
-  .app-sidebar .nav-item-label { opacity: 0; width: 0; overflow: hidden; }
-  .app-sidebar .nav-section-title { opacity: 0; height: 0; padding: 0; margin: 0; overflow: hidden; }
-  .app-sidebar .nav-item::before { display: none; }
-  .app-sidebar .sidebar-brand,
-  .app-sidebar .nav-item,
-  .app-sidebar .sidebar-collapse-btn {
-    justify-content: center;
-    gap: 0;
-    padding-left: 0;
-    padding-right: 0;
-  }
+  .brand-text,
+  .user-greeting { display: none; }
 
   .app-header {
     flex-direction: column;

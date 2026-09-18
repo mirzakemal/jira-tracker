@@ -310,16 +310,29 @@ describe('Standup column layout', () => {
   it('files every testing stage under Test', () => {
     const testing = [
       'Testing', 'TESTING IN PROGRESS', 'TEST RUN PASSED',
-      'Test Comments', 'Tested', 'Ready for Regression'
+      'Tested', 'Ready for Regression'
     ];
     for (const status of testing) {
       expect(mod.columnForIssue({ status, status_category: 'In Progress' })).toBe('test');
     }
   });
 
-  it('treats a failed test run as a blocker, not as testing', () => {
-    expect(mod.columnForIssue({ status: 'TEST RUN FAILED', status_category: 'In Progress' }))
-      .toBe('todo');
+  it('files To Do and Blocked under Blockers / To Do by name, not by fallback', () => {
+    // Asserted explicitly because these used to depend on the catch-all: a
+    // change to that fallback could have relocated them without failing a test.
+    for (const status of ['To Do', 'TO DO', 'Blocked']) {
+      expect(mod.columnForIssue({ status, status_category: 'To Do' })).toBe('todo');
+    }
+    expect(mod.STANDUP_COLUMNS[0].names).toContain('to do');
+  });
+
+  it('treats work handed back to the developer as a blocker, not as testing', () => {
+    // Both mean QA bounced it: the ticket needs dev attention, so it belongs
+    // with the blockers rather than reading as testing still in progress.
+    for (const status of ['TEST RUN FAILED', 'Test Comments', 'test comments']) {
+      expect(mod.columnForIssue({ status, status_category: 'In Progress' }))
+        .toBe('todo');
+    }
   });
 
   it('sends an unrecognised open status to the catch-all column', () => {

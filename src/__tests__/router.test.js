@@ -1,22 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ROUTES, parseRoute, navigate, filtersToParams, paramsToFilters, getCurrentRoute, getQueryParams, removeQueryParam, updateQueryParams } from '../utils/router.js';
+import { ROUTES, parseRoute, navigate, getCurrentRoute, getQueryParams, removeQueryParam, updateQueryParams } from '../utils/router.js';
 
 describe('ROUTES', () => {
   it('defines expected routes', () => {
     expect(ROUTES).toEqual({
-      BOARD: 'board',
-      ALL_ISSUES: 'all-issues',
-      ROADMAP: 'roadmap',
-      VELOCITY: 'velocity',
-      WORKLOAD: 'workload',
-      AGING: 'aging',
-      RELEASES: 'releases',
-      DASHBOARD: 'dashboard',
-      SETTINGS: 'settings',
-      CFD: 'cfd',
-      STANDUP: 'standup',
       PRODUCT: 'product',
-      CUSTOMERS: 'customers'
+      CUSTOMERS: 'customers',
+      STANDUP: 'standup',
+      RADAR: 'radar',
+      BUGS: 'bugs',
+      TRACE: 'trace',
+      SETTINGS: 'settings'
     });
   });
 });
@@ -26,9 +20,9 @@ describe('parseRoute', () => {
     window.location.hash = '';
   });
 
-  it('returns default board route when hash is empty', () => {
+  it('returns the Product Board route when hash is empty', () => {
     const result = parseRoute();
-    expect(result.route).toBe('board');
+    expect(result.route).toBe('product');
     expect(result.params).toEqual({});
   });
 
@@ -128,82 +122,5 @@ describe('updateQueryParams', () => {
   it('replaces params when merge is false', () => {
     updateQueryParams({ searchQuery: 'bug' }, false);
     expect(window.location.hash).toBe('#board?searchQuery=bug');
-  });
-});
-
-describe('filtersToParams', () => {
-  it('converts simple filters to params', () => {
-    const filters = {
-      projectKey: 'TEST',
-      searchQuery: 'bug',
-      status: ['Done']
-    };
-
-    const params = filtersToParams(filters);
-    expect(params.projectKey).toBe('TEST');
-    expect(params.searchQuery).toBe('bug');
-    expect(params.status).toEqual(['Done']);
-  });
-
-  it('handles array filters', () => {
-    const filters = {
-      status: ['Done', 'In Progress'],
-      assigneeId: ['user1', 'user2']
-    };
-
-    const params = filtersToParams(filters);
-    expect(params.status).toEqual(['Done', 'In Progress']);
-    expect(params.assigneeId).toEqual(['user1', 'user2']);
-  });
-
-  it('handles single-value legacy array filters', () => {
-    const filters = {
-      status: 'Done'
-    };
-
-    const params = filtersToParams(filters);
-    expect(params.status).toBe('Done');
-  });
-
-  it('ignores empty arrays', () => {
-    const filters = {
-      status: [],
-      projectKey: 'TEST'
-    };
-
-    const params = filtersToParams(filters);
-    expect(params.status).toBeUndefined();
-    expect(params.projectKey).toBe('TEST');
-  });
-});
-
-describe('paramsToFilters', () => {
-  it('converts simple params to filters', () => {
-    const params = {
-      projectKey: 'TEST',
-      searchQuery: 'bug'
-    };
-
-    const filters = paramsToFilters(params);
-    expect(filters.projectKey).toBe('TEST');
-    expect(filters.searchQuery).toBe('bug');
-  });
-
-  it('converts single value to array for array filters', () => {
-    const params = {
-      status: 'Done'
-    };
-
-    const filters = paramsToFilters(params);
-    expect(filters.status).toEqual(['Done']);
-  });
-
-  it('keeps arrays as arrays for array filters', () => {
-    const params = {
-      status: ['Done', 'In Progress']
-    };
-
-    const filters = paramsToFilters(params);
-    expect(filters.status).toEqual(['Done', 'In Progress']);
   });
 });

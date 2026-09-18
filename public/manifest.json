@@ -1,7 +1,7 @@
 {
-  "name": "Jira Planner",
-  "short_name": "Jira Planner",
-  "description": "Read-only Jira planning tool with local storage",
+  "name": "ProductTVT",
+  "short_name": "ProductTVT",
+  "description": "Product management companion to Jira — read-only, with a local cache",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0e1a",

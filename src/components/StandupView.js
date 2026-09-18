@@ -22,9 +22,15 @@ export const STANDUP_COLUMNS = [
     title: 'Blockers / To Do',
     icon: '🚧',
     tone: 'todo',
-    // A failed test run is a blocker, not testing in progress — named
-    // explicitly rather than left to the catch-all so the intent is obvious.
-    names: ['test run failed'],
+    // Named explicitly rather than left to the catch-all below. 'to do' and
+    // 'blocked' would land here anyway, but relying on the fallback means a
+    // later change to the catch-all could move them silently; listing them
+    // states the intent and pins the behaviour.
+    //
+    // 'test run failed' and 'test comments' are work handed BACK to the
+    // developer, not testing in progress, so they belong here rather than in
+    // Test — Jira agrees, filing both under the "To Do" status category.
+    names: ['to do', 'blocked', 'test run failed', 'test comments'],
     catchAll: true
   },
   { key: 'inProgress', title: 'In Progress', icon: '🔄', tone: 'progress', names: ['in progress'] },
@@ -47,7 +53,7 @@ export const STANDUP_COLUMNS = [
     names: [
       'ready to test', 'ready for test', 'ready for qa',
       'testing', 'testing in progress', 'tested',
-      'test run passed', 'test comments',
+      'test run passed',
       'ready for regression'
     ]
   },
